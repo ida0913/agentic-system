@@ -94,3 +94,16 @@ def default_registry() -> dict[str, Agent]:
         "CICD": stub_agent("CICD", 600),
         "Monitor": stub_agent("Monitor", 500),
     }
+
+
+def live_registry() -> dict[str, Agent]:
+    """Return a registry with the real PM agent wired in; all others remain stubs.
+
+    Use this for interactive demos and live runs. Tests should use
+    ``default_registry()`` with ``call_claude`` mocked to avoid network calls.
+    """
+    from .agents_pm import PMAgent  # local import keeps the stub path dependency-free
+
+    registry = default_registry()
+    registry["PM"] = PMAgent()
+    return registry
