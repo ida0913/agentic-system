@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Optional
 
 from .agents import default_registry
-from .protocol import Agent
+from .machine import FIX_CYCLE_CAP, State, Status, StateSpec, has_gate, is_terminal, spec
+from .protocol import Agent, AgentResult
 from .approvals import ApprovalQueue, ApprovalStatus
 from .audit import DecisionLog
 from .cost import CostGovernor
 from .llm import DETAIL_KEY_CLARIFY_GATE, DETAIL_KEY_CLASSIFICATION
-from .machine import FIX_CYCLE_CAP, State, Status, has_gate, is_terminal, spec
 from .state import StateHeader, StateStore
 
 MAX_RETRIES = 2
@@ -98,31 +98,7 @@ class Orchestrator:
         if not result.ok:
             return self._handle_failure(header)
 
-        self._governor_record(s.owner, result.tokens)
-        if result.detail_patch:
-            self._store.write_detail(result.detail_patch)
-            # Apply classification override written by the PM agent in Phase 2.
-            cls = result.detail_patch.get(DETAIL_KEY_CLASSIFICATION)
-            if cls:
-                header.tier = cls.get("tier", header.tier)
-                header.mode = cls.get("mode", header.mode)
-                header.complexity = cls.get("complexity", header.complexity)
-        self._log.append("AGENT_COMPLETE", f"{s.owner}: {result.summary}", s.owner)
-
-        header.retry_count = 0
-
-        # PM Phase 1 signals a clarify pause via a detail-blob key; park on that
-        # approval instead of raising the normal state-machine gate.
-        clarify_id = (result.detail_patch or {}).get(DETAIL_KEY_CLARIFY_GATE)
-        if clarify_id:
-            header.status = Status.AWAITING_OPERATOR
-            header.open_gates = [clarify_id]
-            self._log.append("GATE_RAISED", f"PM_CLARIFY ({clarify_id})", header.owner_agent)
-            return self._store.write_header(header.version, header)
-
-        if has_gate(header.current_state):
-            return self._raise_gate(header, s.gate or "")
-        return self._advance(header)
+        return self._complete_agent(header, s, result)
 
     def grant(self, approval_id: str, operator: str) -> StateHeader:
         """Grant a pending approval and step the project forward."""
@@ -154,6 +130,35 @@ class Orchestrator:
         return header
 
     # -- internals -----------------------------------------------------------
+
+    def _complete_agent(
+        self, header: StateHeader, s: StateSpec, result: AgentResult
+    ) -> StateHeader:
+        """Record a successful agent run and route to the next state."""
+        self._governor_record(s.owner, result.tokens)
+        if result.detail_patch:
+            self._store.write_detail(result.detail_patch)
+            # Apply classification override written by the PM agent in Phase 2.
+            cls = result.detail_patch.get(DETAIL_KEY_CLASSIFICATION)
+            if cls:
+                header.tier = cls.get("tier", header.tier)
+                header.mode = cls.get("mode", header.mode)
+                header.complexity = cls.get("complexity", header.complexity)
+        self._log.append("AGENT_COMPLETE", f"{s.owner}: {result.summary}", s.owner)
+        header.retry_count = 0
+
+        # PM Phase 1 signals a clarify pause via a detail-blob key; park on that
+        # approval instead of raising the normal state-machine gate.
+        clarify_id = (result.detail_patch or {}).get(DETAIL_KEY_CLARIFY_GATE)
+        if clarify_id:
+            header.status = Status.AWAITING_OPERATOR
+            header.open_gates = [clarify_id]
+            self._log.append("GATE_RAISED", f"PM_CLARIFY ({clarify_id})", header.owner_agent)
+            return self._store.write_header(header.version, header)
+
+        if has_gate(header.current_state):
+            return self._raise_gate(header, s.gate or "")
+        return self._advance(header)
 
     def _advance(self, header: StateHeader) -> StateHeader:
         nxt = spec(header.current_state).nxt
