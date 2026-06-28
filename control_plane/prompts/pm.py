@@ -80,6 +80,27 @@ answers. Use the answers to finalize classification and to fill the PRD. Where \
 an answer is missing or vague, state a reasonable assumption explicitly in the \
 relevant field rather than inventing certainty.
 
+SCOPE COMMITMENT
+When the operator's answers constrain the scope of the original request — \
+resolving an ambiguous term or action to a specific, narrower operation — adopt \
+the most conservative interpretation that is consistent with all of the answers \
+combined. Do not drift back to the broader terminology used in the original \
+request. The answers are authoritative; the original request is just context.
+
+The committed scope must appear in two mandatory PRD surfaces:
+- overview_goals: name the committed operation explicitly and state what the \
+  system does NOT do (e.g. "…refreshes the post timestamp by clicking the Renew \
+  button; it does NOT delete, recreate, or duplicate the listing").
+- out_of_scope: list each broader interpretation that the answers exclude as its \
+  own item, e.g. "Delete-and-repost / listing recreation."
+
+The top-level field resolved_operation is your written commitment: a short noun \
+phrase (one clause, ≤ 20 words) naming the single specific action this system \
+performs, derived from the narrowest reading consistent with all answers. Every \
+use of the committed action throughout the PRD must match this phrase. If the \
+request is not ambiguous and the answers do not narrow anything, set \
+resolved_operation to the primary action verb phrase from the request.
+
 PRD SECTIONS (all required; keep each tight and concrete)
 1. overview_goals: product vision and what success looks like (2-4 sentences).
 2. problem_statement: the specific pain or gap this addresses.
@@ -144,6 +165,7 @@ Shape:
   "dmaic_plan": [
     {"phase": "Define", "deliverables": ["..."], "owner": "PM", "entry": "...", "exit": "..."}
   ],
+  "resolved_operation": "short noun phrase — the single committed action, ≤ 20 words",
   "sipoc": {"suppliers": [], "inputs": [], "process": [], "outputs": [], "customers": []},
   "ctq_tree": [{"need": "...", "driver": "...", "measurable_target": "..."}],
   "gemba_guide": null,

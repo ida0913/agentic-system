@@ -115,6 +115,7 @@ class PMAgent:
         parsed = parse_json(raw)
         _validate_phase2(parsed)
         parsed["classification"] = _coerce_classification(parsed["classification"])
+        _validate_resolved_operation(parsed)
 
         prd_path = _write_prd(parsed, header, workspace)
 
@@ -124,6 +125,7 @@ class PMAgent:
             tokens=PM_MAX_TOKENS // 2,  # conservative estimate
             detail_patch={
                 "prd": parsed["prd"],
+                "resolved_operation": parsed["resolved_operation"],
                 "dmaic_plan": parsed.get("dmaic_plan", []),
                 "sipoc": parsed.get("sipoc", {}),
                 "ctq_tree": parsed.get("ctq_tree", []),
@@ -196,9 +198,18 @@ def _coerce_classification(cls: dict) -> dict:
 
 def _validate_phase2(parsed: dict) -> None:
     """Raise LLMParseError if the Phase 2 reply is missing required keys."""
-    for key in ("classification", "prd", "dmaic_plan"):
+    for key in ("classification", "prd", "dmaic_plan", "resolved_operation"):
         if key not in parsed:
             raise LLMParseError(f"Phase 2 reply missing required key: {key!r}")
+
+
+def _validate_resolved_operation(parsed: dict) -> None:
+    """Raise LLMParseError if resolved_operation is absent or empty."""
+    op = parsed.get("resolved_operation", "")
+    if not isinstance(op, str) or not op.strip():
+        raise LLMParseError(
+            f"resolved_operation must be a non-empty string; got {op!r}"
+        )
 
 
 def _build_phase2_user(
@@ -227,6 +238,7 @@ def _write_prd(parsed: dict, header: StateHeader, workspace: Path) -> Path:
     prd_dir.mkdir(parents=True, exist_ok=True)
     prd_path = prd_dir / "PRD.md"
 
+    resolved_op = parsed.get("resolved_operation", "")
     lines: list[str] = [
         f"# PRD — {header.project_id}",
         "",
@@ -234,6 +246,8 @@ def _write_prd(parsed: dict, header: StateHeader, workspace: Path) -> Path:
         f"**Complexity:** {cls['complexity']}  **Physical:** {cls.get('physical', False)}",
         "",
     ]
+    if resolved_op:
+        lines += [f"**Committed operation:** {resolved_op}", ""]
 
     _section(lines, "Overview & Goals", prd.get("overview_goals", ""))
     _section(lines, "Problem Statement", prd.get("problem_statement", ""))

@@ -95,6 +95,7 @@ PHASE2_REPLY = json.dumps({
             "measurable_target": "< 200 ms p99",
         }
     ],
+    "resolved_operation": "Add, read, update, and delete tasks via a CLI interface",
     "gemba_guide": None,
     "summary_card": "Lightweight CLI task tracker.\nStandard / greenfield / M.\n1 DMAIC phase defined.",
 })
@@ -200,6 +201,8 @@ def test_phase2_produces_prd_and_parks_at_prd_approval(tmp_path: Path) -> None:
     detail = store.read_detail()
     assert "prd" in detail
     assert detail["_classification"]["tier"] == "Standard"
+    assert detail["resolved_operation"] == "Add, read, update, and delete tasks via a CLI interface"
+    assert "**Committed operation:**" in content
 
     # Header classification should be patched too.
     final_header = store.read_header()

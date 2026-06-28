@@ -7,8 +7,8 @@
     "requested_by": "PM",
     "status": "GRANTED",
     "decided_by": "smoke-operator",
-    "id": "34c7ed9b483e",
-    "created_at": 1782619233.149228
+    "id": "754996632caf",
+    "created_at": 1782647349.594607
   },
   {
     "gate": "PRD_APPROVAL",
@@ -18,7 +18,7 @@
     "requested_by": "PM",
     "status": "PENDING",
     "decided_by": null,
-    "id": "6d9222b322db",
-    "created_at": 1782619382.20693
+    "id": "2ea28716862b",
+    "created_at": 1782647669.948373
   }
 ]
