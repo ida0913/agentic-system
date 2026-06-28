@@ -13,7 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from .agents import Agent, default_registry
+from .agents import default_registry
+from .protocol import Agent
 from .approvals import ApprovalQueue, ApprovalStatus
 from .audit import DecisionLog
 from .cost import CostGovernor

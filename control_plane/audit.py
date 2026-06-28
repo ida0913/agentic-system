@@ -28,7 +28,9 @@ class DecisionLog:
                 "| Timestamp | Event | Detail | Actor |\n"
                 "|-----------|-------|--------|-------|\n"
             )
-            self._path.write_text(header)
+            _tmp = self._path.with_suffix(".tmp")
+            _tmp.write_text(header)
+            _tmp.replace(self._path)
 
     @property
     def path(self) -> Path:

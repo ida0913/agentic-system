@@ -47,7 +47,9 @@ class CostLedger:
         self._path = Path(root) / ".agent" / "cost-ledger.json"
         self._path.parent.mkdir(parents=True, exist_ok=True)
         if not self._path.exists():
-            self._path.write_text(json.dumps({"spent_tokens": 0, "by_agent": {}}, indent=2))
+            _tmp = self._path.with_suffix(".tmp")
+            _tmp.write_text(json.dumps({"spent_tokens": 0, "by_agent": {}}, indent=2))
+            _tmp.replace(self._path)
 
     def spent(self) -> int:
         """Total tokens spent so far on this project."""
@@ -58,7 +60,9 @@ class CostLedger:
         data = self._load()
         data["spent_tokens"] = int(data["spent_tokens"]) + tokens
         data["by_agent"][agent] = int(data["by_agent"].get(agent, 0)) + tokens
-        self._path.write_text(json.dumps(data, indent=2))
+        _tmp = self._path.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(data, indent=2))
+        _tmp.replace(self._path)
         return data["spent_tokens"]
 
     def _load(self) -> dict:

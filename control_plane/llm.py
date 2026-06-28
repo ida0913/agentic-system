@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess # nosec B404 — subprocess used with list arg + shell=False; see call site
+from typing import Any
 
 
 DETAIL_KEY_CLARIFY_GATE = "_pm_clarify_gate_id"
@@ -76,7 +77,7 @@ def call_claude(system: str, user: str, model: str, max_tokens: int) -> str:  # 
     return text
 
 
-def parse_json(text: str) -> dict:
+def parse_json(text: str) -> dict[str, Any]:
     """Parse strict JSON from a model reply.
 
     Tolerates leading/trailing whitespace and markdown code fences (the model

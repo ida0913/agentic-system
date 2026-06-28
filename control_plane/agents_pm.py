@@ -22,7 +22,7 @@ import textwrap
 from pathlib import Path
 from typing import Any, Callable
 
-from .agents import AgentResult
+from .protocol import AgentResult
 from .approvals import ApprovalQueue
 from .llm import DETAIL_KEY_CLARIFY_GATE, DETAIL_KEY_CLASSIFICATION, LLMError, LLMParseError, call_claude, parse_json
 from .prompts.pm import PM_MAX_TOKENS, PM_MODEL, PM_PHASE1_SYSTEM, PM_PHASE2_SYSTEM
@@ -292,7 +292,9 @@ def _write_prd(parsed: dict, header: StateHeader, workspace: Path) -> Path:
     if parsed.get("summary_card"):
         lines += ["---", "", f"_{parsed['summary_card']}_", ""]
 
-    prd_path.write_text("\n".join(lines))
+    _tmp = prd_path.with_suffix(".tmp")
+    _tmp.write_text("\n".join(lines))
+    _tmp.replace(prd_path)
     return prd_path
 
 

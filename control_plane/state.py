@@ -91,7 +91,9 @@ class StateStore:
             raise StateConflict(f"state already exists for {header.project_id}")
         header.version = 1
         self._write_header(header)
-        self._detail_path.write_text(json.dumps(detail or {}, indent=2))
+        _tmp = self._detail_path.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(detail or {}, indent=2))
+        _tmp.replace(self._detail_path)
         return header
 
     def read_header(self) -> StateHeader:
@@ -130,8 +132,12 @@ class StateStore:
         """Merge ``patch`` into the detail blob and persist it."""
         detail = self.read_detail()
         detail.update(patch)
-        self._detail_path.write_text(json.dumps(detail, indent=2))
+        _tmp = self._detail_path.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(detail, indent=2))
+        _tmp.replace(self._detail_path)
         return detail
 
     def _write_header(self, header: StateHeader) -> None:
-        self._header_path.write_text(json.dumps(header.to_json(), indent=2))
+        _tmp = self._header_path.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(header.to_json(), indent=2))
+        _tmp.replace(self._header_path)

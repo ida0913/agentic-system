@@ -75,7 +75,9 @@ class ApprovalQueue:
         self._path = Path(root) / ".agent" / "approvals.json"
         self._path.parent.mkdir(parents=True, exist_ok=True)
         if not self._path.exists():
-            self._path.write_text("[]")
+            _tmp = self._path.with_suffix(".tmp")
+            _tmp.write_text("[]")
+            _tmp.replace(self._path)
 
     def request(
         self, gate: str, project_id: str, action: str, risk_class: str, requested_by: str
@@ -139,4 +141,6 @@ class ApprovalQueue:
         return [Approval.from_json(d) for d in json.loads(self._path.read_text())]
 
     def _save(self, items: list[Approval]) -> None:
-        self._path.write_text(json.dumps([a.to_json() for a in items], indent=2))
+        _tmp = self._path.with_suffix(".tmp")
+        _tmp.write_text(json.dumps([a.to_json() for a in items], indent=2))
+        _tmp.replace(self._path)
