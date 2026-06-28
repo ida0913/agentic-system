@@ -10,7 +10,7 @@ rather than charging.
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess # nosec B404 — subprocess used with list arg + shell=False; see call site
 
 
 DETAIL_KEY_CLARIFY_GATE = "_pm_clarify_gate_id"
@@ -56,7 +56,7 @@ def call_claude(system: str, user: str, model: str, max_tokens: int) -> str:  # 
         "--output-format", "text",
     ]
     try:
-        result = subprocess.run(
+        result = subprocess.run( # nosec B603 — list arg, shell=False; prompt via stdin (input=), not argv
             cmd,
             input=user,
             capture_output=True,
