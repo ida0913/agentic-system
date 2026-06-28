@@ -1,0 +1,24 @@
+[
+  {
+    "gate": "PM_CLARIFY",
+    "project_id": "craigslist-repost-smoke",
+    "action": "Operator must answer clarifying questions before the PRD can be drafted. See 'questions' in the project detail blob.",
+    "risk_class": "low",
+    "requested_by": "PM",
+    "status": "GRANTED",
+    "decided_by": "smoke-operator",
+    "id": "cb1daaa92718",
+    "created_at": 1782613680.717144
+  },
+  {
+    "gate": "PRD_APPROVAL",
+    "project_id": "craigslist-repost-smoke",
+    "action": "advance DEFINE -> DESIGN",
+    "risk_class": "low",
+    "requested_by": "PM",
+    "status": "PENDING",
+    "decided_by": null,
+    "id": "9bf48c1250e8",
+    "created_at": 1782613832.273928
+  }
+]

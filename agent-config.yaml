@@ -1,0 +1,52 @@
+# agent-config.yaml — seat-level execution model for the agentic system.
+#
+# Each "seat" maps an agent role (matching the owner field in machine.py) to its
+# execution model and model id.
+#
+# Execution modes:
+#   subprocess-interactive  — drives the local `claude` CLI via subprocess.
+#                             Relies on the operator's active Claude Code session
+#                             for auth; no API key or SDK setup required.
+#   headless-sdk            — calls the Anthropic Messages API directly via the
+#                             Python SDK.  Requires ANTHROPIC_API_KEY and does not
+#                             depend on a running CLI session.
+#
+# The PM seat is deliberately subprocess-interactive for this build phase.
+# All other autonomous agent seats are headless by design — they run in the
+# background without an interactive session and must not depend on the CLI.
+#
+# Task 2 (migrate_to): once OAuth / Anthropic SDK auth is wired, the PM seat
+# will move to headless-sdk so it can run unattended alongside the other agents.
+
+seats:
+  PM:
+    model: claude-sonnet-4-6
+    execution: subprocess-interactive
+    migrate_to: headless-sdk
+    # Deliberate build-time choice: PM is interactive now because it requires
+    # the operator's active Claude Code session for auth (Task 2 not yet done).
+    # When Task 2 lands (OAuth/SDK setup), flip execution to headless-sdk.
+
+  Architect:
+    model: claude-sonnet-4-6
+    execution: headless-sdk
+
+  Dev:
+    model: claude-sonnet-4-6
+    execution: headless-sdk
+
+  QA:
+    model: claude-sonnet-4-6
+    execution: headless-sdk
+
+  ReviewPanel:
+    model: claude-sonnet-4-6
+    execution: headless-sdk
+
+  CICD:
+    model: claude-haiku-4-5-20251001
+    execution: headless-sdk
+
+  Monitor:
+    model: claude-haiku-4-5-20251001
+    execution: headless-sdk

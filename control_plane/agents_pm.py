@@ -24,7 +24,7 @@ from typing import Any, Callable
 
 from .agents import AgentResult
 from .approvals import ApprovalQueue
-from .llm import LLMError, LLMParseError, call_claude, parse_json
+from .llm import DETAIL_KEY_CLARIFY_GATE, DETAIL_KEY_CLASSIFICATION, LLMError, LLMParseError, call_claude, parse_json
 from .prompts.pm import PM_MAX_TOKENS, PM_MODEL, PM_PHASE1_SYSTEM, PM_PHASE2_SYSTEM
 from .state import StateHeader
 
@@ -89,7 +89,7 @@ class PMAgent:
                 "provisional": parsed["provisional"],
                 "reasoning_note": parsed.get("reasoning_note", ""),
                 # Signals the orchestrator to park on PM_CLARIFY instead of PRD_APPROVAL.
-                "_pm_clarify_gate_id": approval.id,
+                DETAIL_KEY_CLARIFY_GATE: approval.id,
             },
             summary=(
                 f"PM Phase 1: {len(parsed['questions'])} clarifying question(s) raised "
@@ -114,6 +114,7 @@ class PMAgent:
         raw = call_claude(PM_PHASE2_SYSTEM, user_msg, PM_MODEL, PM_MAX_TOKENS)
         parsed = parse_json(raw)
         _validate_phase2(parsed)
+        parsed["classification"] = _coerce_classification(parsed["classification"])
 
         prd_path = _write_prd(parsed, header, workspace)
 
@@ -130,7 +131,7 @@ class PMAgent:
                 "summary_card": parsed.get("summary_card", ""),
                 "links": {"prd": str(prd_path.relative_to(workspace))},
                 # Signals the orchestrator to patch header tier/mode/complexity.
-                "_classification": cls,
+                DETAIL_KEY_CLASSIFICATION: cls,
             },
             summary=(
                 f"PM Phase 2: PRD drafted — tier={cls['tier']}, "
@@ -152,6 +153,45 @@ def _validate_phase1(parsed: dict) -> None:
             raise LLMParseError(f"Phase 1 reply missing required key: {key!r}")
     if not isinstance(parsed["questions"], list) or not parsed["questions"]:
         raise LLMParseError("Phase 1 'questions' must be a non-empty list")
+
+
+_TIER_COERCE: dict[str, str] = {
+    "1": "Micro", "micro": "Micro",
+    "2": "Standard", "standard": "Standard",
+    "3": "Full", "full": "Full",
+}
+_COMPLEXITY_COERCE: dict[str, str] = {
+    "s": "S", "small": "S",
+    "m": "M", "medium": "M",
+    "l": "L", "large": "L",
+    "xl": "XL", "extra-large": "XL", "extralarge": "XL", "extra_large": "XL",
+}
+_VALID_TIERS = {"Micro", "Standard", "Full"}
+_VALID_MODES = {"greenfield", "improvement"}
+_VALID_COMPLEXITIES = {"S", "M", "L", "XL"}
+
+
+def _coerce_classification(cls: dict) -> dict:
+    """Coerce obvious model drift in classification enum fields; raise on unrecognised values."""
+    tier = str(cls.get("tier", ""))
+    if tier not in _VALID_TIERS:
+        coerced = _TIER_COERCE.get(tier.lower()) or _TIER_COERCE.get(tier)
+        if coerced is None:
+            raise LLMParseError(f"unrecognised tier {tier!r}; expected Micro/Standard/Full")
+        cls = {**cls, "tier": coerced}
+
+    mode = str(cls.get("mode", ""))
+    if mode not in _VALID_MODES:
+        raise LLMParseError(f"unrecognised mode {mode!r}; expected greenfield/improvement")
+
+    complexity = str(cls.get("complexity", ""))
+    if complexity not in _VALID_COMPLEXITIES:
+        coerced = _COMPLEXITY_COERCE.get(complexity.lower()) or _COMPLEXITY_COERCE.get(complexity)
+        if coerced is None:
+            raise LLMParseError(f"unrecognised complexity {complexity!r}; expected S/M/L/XL")
+        cls = {**cls, "complexity": coerced}
+
+    return cls
 
 
 def _validate_phase2(parsed: dict) -> None:

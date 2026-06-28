@@ -1,0 +1,16 @@
+{
+  "project_id": "craigslist-repost-smoke",
+  "tier": "Standard",
+  "mode": "greenfield",
+  "current_state": "DEFINE",
+  "status": "AWAITING_OPERATOR",
+  "owner_agent": "PM",
+  "complexity": "M",
+  "retry_count": 0,
+  "fix_cycle_count": 0,
+  "budget_status": "OK",
+  "open_gates": [
+    "9bf48c1250e8"
+  ],
+  "version": 5
+}

@@ -17,6 +17,7 @@ from .agents import Agent, default_registry
 from .approvals import ApprovalQueue, ApprovalStatus
 from .audit import DecisionLog
 from .cost import CostGovernor
+from .llm import DETAIL_KEY_CLARIFY_GATE, DETAIL_KEY_CLASSIFICATION
 from .machine import FIX_CYCLE_CAP, State, Status, has_gate, is_terminal, spec
 from .state import StateHeader, StateStore
 
@@ -100,7 +101,7 @@ class Orchestrator:
         if result.detail_patch:
             self._store.write_detail(result.detail_patch)
             # Apply classification override written by the PM agent in Phase 2.
-            cls = result.detail_patch.get("_classification")
+            cls = result.detail_patch.get(DETAIL_KEY_CLASSIFICATION)
             if cls:
                 header.tier = cls.get("tier", header.tier)
                 header.mode = cls.get("mode", header.mode)
@@ -111,7 +112,7 @@ class Orchestrator:
 
         # PM Phase 1 signals a clarify pause via a detail-blob key; park on that
         # approval instead of raising the normal state-machine gate.
-        clarify_id = (result.detail_patch or {}).get("_pm_clarify_gate_id")
+        clarify_id = (result.detail_patch or {}).get(DETAIL_KEY_CLARIFY_GATE)
         if clarify_id:
             header.status = Status.AWAITING_OPERATOR
             header.open_gates = [clarify_id]

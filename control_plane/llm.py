@@ -13,6 +13,10 @@ import json
 import subprocess
 
 
+DETAIL_KEY_CLARIFY_GATE = "_pm_clarify_gate_id"
+DETAIL_KEY_CLASSIFICATION = "_classification"
+
+
 class LLMError(RuntimeError):
     """Raised when the ``claude`` CLI call fails (non-zero exit, empty output, timeout)."""
 
@@ -50,7 +54,6 @@ def call_claude(system: str, user: str, model: str, max_tokens: int) -> str:  # 
         "--model", model,
         "--system-prompt", system,
         "--output-format", "text",
-        "--bare",
     ]
     try:
         result = subprocess.run(
@@ -76,8 +79,8 @@ def call_claude(system: str, user: str, model: str, max_tokens: int) -> str:  # 
 def parse_json(text: str) -> dict:
     """Parse strict JSON from a model reply.
 
-    Tolerates leading/trailing whitespace (the model sometimes pads its output)
-    but rejects anything that is genuinely not a JSON object.
+    Tolerates leading/trailing whitespace and markdown code fences (the model
+    sometimes wraps JSON in ```json ... ``` despite instructions not to).
 
     Args:
         text: Raw text returned by the model.
@@ -89,6 +92,10 @@ def parse_json(text: str) -> dict:
         LLMParseError: If the text is not valid JSON after stripping whitespace.
     """
     stripped = text.strip()
+    # Strip optional ```json or ``` fences the model sometimes emits.
+    if stripped.startswith("```"):
+        stripped = stripped.removeprefix("```json").removeprefix("```")
+        stripped = stripped.rstrip("`").strip()
     try:
         result = json.loads(stripped)
     except json.JSONDecodeError as exc:

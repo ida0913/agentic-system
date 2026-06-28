@@ -115,11 +115,20 @@ LEAN SIX SIGMA DEFINE ARTIFACTS
   for at the work site: waiting, motion, defects, rework) and "report_fields"
   (the exact fields Adi should record). If not physical, set to null.
 
+CLASSIFICATION ENUM VALUES — these are the only legal strings; any other form is a bug
+- tier: MUST be exactly one of "Micro", "Standard", "Full". Never a number (not 1, 2, 3),
+  never abbreviated, never lowercase. "Micro" = single script/no persistence; "Standard" =
+  single-service/some persistence or one integration; "Full" = multi-service/external APIs/PII.
+- mode: MUST be exactly "greenfield" or "improvement".
+- complexity: MUST be exactly one of "S", "M", "L", "XL". Never spelled out (not "small",
+  "medium", "large", "extra-large"), never lowercase, never a number.
+- physical: MUST be a JSON boolean true or false.
+
 OUTPUT
 Return STRICT JSON only. No markdown, no backticks, no prose outside the object. \
 Shape:
 {
-  "classification": {"tier": "...", "mode": "...", "physical": true|false, "complexity": "..."},
+  "classification": {"tier": "Micro|Standard|Full", "mode": "greenfield|improvement", "physical": true|false, "complexity": "S|M|L|XL"},
   "prd": {
     "overview_goals": "...",
     "problem_statement": "...",
