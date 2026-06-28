@@ -289,6 +289,32 @@ def _write_prd(parsed: dict, header: StateHeader, workspace: Path) -> Path:
                 lines.append(f"- {d}")
             lines.append("")
 
+    if parsed.get("sipoc"):
+        sipoc = parsed["sipoc"]
+        lines += ["## SIPOC", ""]
+        for label, key in (
+            ("Suppliers", "suppliers"),
+            ("Inputs", "inputs"),
+            ("Process", "process"),
+            ("Outputs", "outputs"),
+            ("Customers", "customers"),
+        ):
+            items = sipoc.get(key, [])
+            if items:
+                lines.append(f"**{label}**")
+                for item in items:
+                    lines.append(f"- {item}")
+                lines.append("")
+
+    if parsed.get("ctq_tree"):
+        lines += ["## CTQ Tree", ""]
+        for entry in parsed["ctq_tree"]:
+            need = entry.get("need", "")
+            driver = entry.get("driver", "")
+            target = entry.get("measurable_target", "")
+            lines.append(f"- **Need:** {need} → **Driver:** {driver} → **Target:** {target}")
+        lines.append("")
+
     if parsed.get("summary_card"):
         lines += ["---", "", f"_{parsed['summary_card']}_", ""]
 

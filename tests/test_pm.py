@@ -182,6 +182,21 @@ def test_phase2_produces_prd_and_parks_at_prd_approval(tmp_path: Path) -> None:
     assert "# PRD" in content
     assert "Overview" in content
 
+    # SIPOC section rendered
+    assert "## SIPOC" in content
+    assert "**Suppliers**" in content
+    assert "**Inputs**" in content
+    assert "**Process**" in content
+    assert "**Outputs**" in content
+    assert "**Customers**" in content
+    assert "- Operator" in content  # from PHASE2_REPLY suppliers
+
+    # CTQ Tree section rendered
+    assert "## CTQ Tree" in content
+    assert "Fast retrieval" in content
+    assert "Low latency" in content
+    assert "< 200 ms p99" in content
+
     detail = store.read_detail()
     assert "prd" in detail
     assert detail["_classification"]["tier"] == "Standard"

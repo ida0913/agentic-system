@@ -4,11 +4,11 @@
 
 ## Overview & Goals
 
-A cron-driven Playwright script that logs into Craigslist every 48 hours and clicks the Renew button on Adi's tutoring listing, refreshing the post timestamp to keep it near the top of local search results. The system runs entirely on Adi's personal MacBook — no servers, no cloud. Success means the listing renews on schedule without any manual action from Adi.
+Build a Playwright-based Python 3.11 script that automatically reposts Adi's Craigslist tutoring listing every 48 hours via a macOS cron job, keeping the listing near the top of search results with zero manual effort. Success means the listing timestamp refreshes reliably on schedule, the operator never has to interact with Craigslist manually for this task, and every run produces a clear log entry for audit.
 
 ## Problem Statement
 
-Craigslist tutoring listings sink in search ranking as they age; the Renew button only appears after 48 hours and must be clicked manually. Forgetting to click it costs visibility and incoming tutoring inquiries. The current process requires Adi to remember and manually log in every two days, which is error-prone and time-consuming.
+Craigslist listings drop in search visibility within approximately 48 hours of posting. Manually reposting requires logging in, locating the listing, and clicking the repost button — a repetitive 3–5 minute task that must recur indefinitely every two days. Missing even one cycle means reduced exposure and lost tutoring inquiries, yet the task provides zero creative value.
 
 ## Target Audience
 
@@ -16,45 +16,44 @@ Internal — single operator (Adi)
 
 ## Success Metrics
 
-- Listing is renewed within ±5 minutes of every 48-hour eligibility window, verified by log timestamps, for 30 consecutive days without manual intervention.
-- Zero missed renewal cycles per calendar month when the laptop is powered on at the scheduled time.
+- Repost succeeds on ≥ 95% of scheduled cron runs, measured by log file success-to-failure ratio over the first 30 days post-deployment.
+- Each run completes (from cron trigger to confirmed repost and clean exit) in under 3 minutes, measured by timestamps in the log file.
 
 ## Features & Requirements
 
 ### Functional
-- [must] Playwright script reads stored credentials and logs into Craigslist headlessly.
-- [must] Navigate to the account's Manage Postings page and locate the tutoring listing.
-- [must] Click the Renew button when it is available; exit cleanly and log 'not eligible — skip' when it is not yet eligible.
-- [must] Write a timestamped success or failure entry to a local log file after every run.
-- [must] macOS cron or launchd job triggers the script every 48 hours.
-- [should] Fire a macOS desktop notification (via osascript) on any failure.
-- [could] Retry the renewal once after a short delay before recording a final failure.
-- [wont] Slack, email, or SMS alerting.
+- [must] Authenticate to Craigslist using credentials loaded at runtime from macOS Keychain (via the keyring library) — never from plaintext files
+- [must] Navigate to the active tutoring listing and trigger Craigslist's built-in Repost flow
+- [must] Confirm repost success by asserting the listing's displayed post date matches the current date after the repost action
+- [must] Write a timestamped log entry (ISO-8601) for every run, recording outcome (SUCCESS or FAILURE) and run duration in seconds
+- [should] Retry the repost once automatically on transient failure (network timeout, element-not-found) before marking the run as failed
+- [could] Emit a macOS desktop notification via osascript on failure so Adi is alerted without checking the log
+- [wont] Modify any listing content — title, body, and images are frozen and must not be touched by the script
 
 ### Non-functional
-- Credentials must be stored in macOS Keychain or a secured env file — never hardcoded in source.
-- Each script run must complete within 2 minutes.
-- Log file must be capped or rotated to stay under 10 MB.
+- [must] Run in Playwright headless mode so the script does not produce a visible browser window or interrupt active laptop work
+- [must] Complete end-to-end in under 3 minutes under normal network conditions
+- [must] Store credentials exclusively in macOS Keychain; no secrets in source code, config files, or crontab entries
+- [should] Be idempotent: safe to re-invoke immediately if the cron daemon fires twice in the same window
 
 ### Usability
-- Script is invokable from the terminal with a single command for manual testing.
-- Log file uses human-readable timestamped lines (ISO-8601 timestamps, one event per line).
-- README documents credential setup, cron configuration, and how to interpret the log.
+- [must] Single configuration file (e.g. config.toml excluded from version control) for the listing URL and any non-secret runtime settings
+- [should] Log output uses a consistent human-readable format — ISO timestamp | level | message — for easy manual review
 
 ## User Journey
 
-Trigger: cron/launchd fires every 48 hours → Script reads Craigslist credentials from macOS Keychain or env file → Playwright launches headless Chromium → Navigates to craigslist.org and completes password login → Navigates to My Account › Manage Postings [HANDOFF TO ARCHITECT: confirm exact post-login URL and DOM selectors for the Manage Postings page and the Renew button, including any AJAX-loaded states] → Locates the tutoring listing row → If Renew button is present and clickable, clicks it and waits for the page-state confirmation → Writes timestamped success log entry → Exits with code 0. On any failure (login blocked, button not found, unexpected DOM, network timeout): writes failure log entry with error detail → Fires macOS osascript notification → Exits with non-zero code.
+macOS cron job (launchd plist or crontab) fires every 48 hours → Python script starts, reads listing URL from config file, loads credentials from macOS Keychain → Playwright launches headless Chromium → Script navigates to Craigslist login page and authenticates → Script navigates to 'My Postings' and locates the active tutoring listing → [HANDOFF TO ARCHITECT] (decision: use Craigslist built-in Repost button flow vs. delete-and-resubmit; cookie or session-file persistence to reduce repeated full logins; CSS/XPath selector strategy for resilience against UI drift) → Script clicks the Repost button and steps through any confirmation dialogs → Script asserts the listing's post date is now today → Script writes a SUCCESS log entry with timestamp and duration and exits 0. On any failure: script logs FAILURE entry with error detail and stack trace, optionally fires macOS desktop notification, exits non-zero.
 
 ## Assumptions & Constraints
 
-- ASSUMPTION: Craigslist login uses username and password only — no SMS verification, phone call, or interactive CAPTCHA is required during automated headless sessions (Q4 was unanswered). If CAPTCHAs are triggered, full automation is not feasible without a third-party solving service, which is out of scope.
-- ASSUMPTION: Craigslist presents a 'Renew' button on the existing listing after 48 hours (timestamp refresh, not delete-and-recreate), based on operator's statement that 'only the post timestamp needs refreshing.'
-- ASSUMPTION: Operator's laptop is powered on and not in deep sleep when cron fires. No automatic wake-on-schedule mechanism is in scope.
-- Craigslist has no public API; all automation is DOM-based via Playwright/Chromium.
-- Craigslist may change its HTML/DOM structure at any time, breaking selectors; the script will require periodic maintenance.
-- Automating Craigslist posting may violate their Terms of Service. Operator assumes full legal and ToS risk.
-- Python 3.11 and Playwright are already installed on the operator's macOS machine.
-- No cloud infrastructure, VPS, or always-on server is used.
+- Assumption: Craigslist does not hard-block headless Playwright automation for established accounts on the repost flow; no unsolvable CAPTCHA will appear under normal conditions. If CAPTCHA appears it is treated as a FAILURE, not handled.
+- Assumption: The operator's laptop is awake and online when the cron window fires every 48 hours. No wake-on-schedule or laptop-sleep-management is in scope.
+- Assumption: The existing Craigslist tutoring listing remains active (not flagged, removed, or expired). The script detects a missing listing as a FAILURE but does not attempt to create a new listing from scratch.
+- Assumption: Notification preference is log-file-only by default (Q3 was answered with tech confirmation, not a notification preference); macOS desktop notification on failure is a 'could' feature, not 'must'.
+- Assumption: Single listing only, inferred from singular phrasing in the request and the simple cron approach confirmed in A4.
+- Constraint: No Craigslist API exists; browser automation via Playwright is the only integration path.
+- Constraint: Python 3.11 and Playwright are already installed on the operator's machine; no new runtimes are introduced.
+- Constraint: All secrets must live in macOS Keychain; nothing sensitive may appear in any committed or plaintext file.
 
 ## Competitive Context
 
@@ -62,77 +61,114 @@ N/A — internal
 
 ## Out of Scope
 
-- Editing listing content (title, body text, price, images) between renewal cycles.
-- Full delete-and-recreate posting flow.
-- Cloud, VPS, or server deployment.
-- Slack, email, or SMS notifications.
-- Multi-listing or multi-account support.
-- CAPTCHA solving or human-in-the-loop verification steps.
-- Windows or Linux OS support.
-- Automatic laptop wake scheduling.
+- Reposting multiple listings or listings across different cities
+- Cloud, VPS, or server deployment; execution is exclusively local on the operator's laptop
+- Slack, email, SMS, or push notification integrations
+- Editing or updating any listing content (title, body, images, price, category)
+- CAPTCHA solving or account-recovery flows
+- Support for any classifieds platform other than Craigslist
+- A management UI or dashboard for the script
+- Delete-and-resubmit as a fallback path — if the Repost button is absent, the run is logged as FAILURE
 
 ## Acceptance Criteria
 
-1. When the script runs and the listing is eligible for renewal, the renewal completes and a timestamped success entry appears in the log file within 2 minutes — verifiable by inspecting the log.
-2. When the script runs and the listing is not yet eligible (< 48 hours old), the script exits with code 0 and logs 'not eligible — skip' with no notification fired.
-3. When credentials are invalid or login fails, the script exits with a non-zero code, a failure entry appears in the log, and a macOS desktop notification appears.
-4. Running 'crontab -l' or 'launchctl list' on the operator's machine shows the 48-hour schedule entry pointing to the script.
-5. No Craigslist credentials appear in plaintext in any source file, confirmed by grep of the project directory.
+1. AC-1: Given valid credentials and an active listing, the script completes the repost and the listing's displayed post date matches the current date within 60 seconds of script invocation — verified by the script's own post-run DOM assertion.
+2. AC-2: Given a simulated network failure on the first attempt, the script retries exactly once; if the retry also fails, it writes a FAILURE log entry containing the error message and exits with a non-zero return code.
+3. AC-3: The cron job fires at the correct 48-hour cadence — verified by inspecting log entry timestamps across at least 3 consecutive successful runs showing ~48-hour gaps.
+4. AC-4: No plaintext credentials appear in any script file, config file, crontab entry, or git history — verified by grep scan of the project directory and crontab before sign-off.
+5. AC-5: The script completes entirely in headless mode with no visible browser window — verified by observer check during a manual test invocation.
+6. AC-6: Every run produces exactly one log entry containing the ISO-8601 run timestamp, outcome label (SUCCESS or FAILURE), and run duration in whole seconds.
 
 ## DMAIC Plan
 
 ### Define
-**Owner:** PM  **Entry:** Operator has submitted the original request and answered clarifying questions.  **Exit:** PRD is complete and operator has acknowledged the scope, assumptions, and out-of-scope items.
+**Owner:** PM  **Entry:** Operator request received and clarifying answers collected.  **Exit:** Define package reviewed and approved by operator; classification, scope, and all acceptance criteria are locked. Complexity: S.
 
-- PRD with acceptance criteria
-- SIPOC diagram
-- CTQ tree
-- Project classification (tier/mode/complexity)
+- Approved PRD with locked acceptance criteria
+- SIPOC and CTQ tree
+- Dual-mode DMAIC plan with owner and entry/exit criteria per phase
 
 ### Measure
-**Owner:** PM  **Entry:** PRD approved and scope confirmed by operator.  **Exit:** Manual baseline cost (time/month, missed renewals/month) is documented and agreed as the benchmark the automation must beat.
+**Owner:** PM  **Entry:** Define phase exit criteria met.  **Exit:** Baseline numbers documented in the project log; manual effort cost quantified and agreed as the improvement benchmark. Complexity: S.
 
-- Manual baseline documented: estimated time per manual renewal (approx. 3–5 min login + navigate + click) multiplied by renewal frequency (every 48 h = ~15×/month) = ~45–75 min/month of pure manual toil.
-- Observed frequency of missed renewals per month and resulting listing-age degradation (days listing goes stale).
-- Baseline inquiry/contact volume correlated with listing freshness, if Adi has historical data.
+- Manual baseline recorded: average wall-clock time Adi spends per manual repost session (target unit: seconds)
+- Frequency audit: how many repost cycles occur per month and how often the cycle is missed or late
+- Calculated monthly manual effort displaced by this automation (minutes/month)
+- Estimated cost of missed reposts in lost tutoring inquiries (qualitative if not quantifiable)
 
 ### Analyze
-**Owner:** Architect  **Entry:** Manual baseline documented.  **Exit:** Architect confirms selectors are stable, login flow is fully mappable headlessly, and a written technical design is approved by operator.
+**Owner:** Claude (general-purpose agent)  **Entry:** Measure baseline documented.  **Exit:** Repost UI flow fully mapped; all failure modes catalogued with handling strategy; no open unknowns blocking implementation. Complexity: S.
 
-- Craigslist Manage Postings page URL and DOM selector map for the Renew button (confirmed via live browser inspection).
-- Login flow analysis: form fields, redirect sequence, session cookie lifetime, headless vs. headed behavior.
-- Enumerated failure modes: CAPTCHA trigger, session expiry, listing not found, DOM change, network timeout.
-- macOS cron vs. launchd tradeoff recommendation (sleep behavior, logging, reliability).
-- Credential storage approach decision: macOS Keychain via keyring library vs. .env file with restricted permissions.
+- Craigslist repost UI flow mapped: exact page sequence, button selectors, form fields, and confirmation signals
+- Failure mode catalog: login failure, listing-not-found, Repost button absent, CAPTCHA trigger, session expiry, network timeout
+- Selector fragility assessment: stable vs. drift-prone DOM targets
+- Cookie/session persistence feasibility: whether storing a Playwright session file avoids repeated full logins
+- Credential storage option analysis confirming macOS Keychain via keyring as the approach
 
 ### Improve
-**Owner:** Engineer  **Entry:** Technical design approved by Architect.  **Exit:** Script passes a live end-to-end smoke test on Adi's actual Craigslist tutoring listing and all five acceptance criteria are satisfied.
+**Owner:** Plan agent  **Entry:** Analyze failure modes and UI map complete.  **Exit:** Architecture plan reviewed and approved; all acceptance-criteria-mapped design decisions resolved; implementation can begin without ambiguity. Complexity: M.
 
-- Python 3.11 Playwright script: login, Manage Postings navigation, eligibility check, Renew click, page-state confirmation.
-- macOS osascript notification hook on failure.
-- Optional single retry on transient network or timeout errors.
-- Credential loader module (Keychain via keyring or env file).
-- Log writer with rotation/cap at 10 MB.
-- Smoke test runnable from terminal against a real listing.
+- Detailed script architecture: module breakdown (auth, navigate, repost, confirm, log), retry logic design, logging schema
+- Credential storage design: keyring integration pattern and one-time enrollment flow
+- macOS scheduling spec: launchd plist vs. crontab comparison and recommended configuration for 48-hour cadence
+- Headless Playwright session design: cookie-reuse strategy vs. fresh login per run, tradeoffs documented
 
 ### Implement
-**Owner:** Engineer  **Entry:** Script tested and all acceptance criteria pass.  **Exit:** First automated 48-hour renewal fires without manual intervention and is recorded in the log.
+**Owner:** Claude (general-purpose agent)  **Entry:** Improve architecture plan approved by PM.  **Exit:** All 6 acceptance criteria pass on the operator's machine; 3 consecutive timed runs succeed; no secrets in plaintext anywhere. Complexity: M.
 
-- cron or launchd job installed on operator's MacBook with the 48-hour schedule.
-- Credentials stored in macOS Keychain (not in source files).
-- Log file path confirmed and writable.
-- First automated renewal cycle observed and log entry verified by operator.
+- Python 3.11 Playwright script: login, navigate, repost, confirm, log — passing all AC-1 through AC-6
+- macOS launchd plist (or crontab entry) configured for 48-hour cadence
+- One-time Keychain credential enrollment script or step-by-step setup instructions
+- 3 consecutive cron-triggered test runs with SUCCESS log entries and verified listing timestamp updates
+- grep scan confirming zero plaintext credentials in project directory and crontab
 
 ### Control
-**Owner:** PM  **Entry:** First automated renewal confirmed in log.  **Exit:** 30 consecutive days of on-schedule renewals with zero missed cycles (when laptop is on) and operator holds the maintenance runbook.
+**Owner:** PM  **Entry:** Implement phase exit criteria met; script live on production cron schedule.  **Exit:** All control artifacts documented; operator confirms understanding of maintenance procedures and failure SOP. Complexity: S.
 
-- Log review checklist: weekly scan for consecutive failures or 'not eligible' anomalies.
-- Selector maintenance runbook: steps to re-map DOM selectors when Craigslist changes its markup.
-- 30-day clean-run verification report confirming zero missed cycles (when laptop was on).
-- Escalation procedure if CAPTCHA is consistently encountered (options: switch to headed mode, manual fallback, CAPTCHA service decision).
+- Log review cadence SOP: operator checks log file weekly; alert threshold defined (2 consecutive FAILUREs = manual intervention)
+- Selector update protocol: step-by-step procedure for updating CSS/XPath selectors if Craigslist changes its UI
+- Failure response SOP: what Adi does when a FAILURE log entry or desktop notification appears
+- requirements.txt with pinned dependency versions to prevent drift
+- Scheduled 90-day script health check reminder
+
+## SIPOC
+
+**Suppliers**
+- macOS cron daemon (launchd) — provides the 48-hour schedule trigger
+- macOS Keychain — supplies Craigslist credentials at runtime via the keyring library
+- Craigslist web application (craigslist.org) — hosts the listing and repost UI
+- Playwright + Chromium — browser automation engine executing the repost flow
+
+**Inputs**
+- Craigslist account credentials (username + password, loaded from macOS Keychain)
+- Active tutoring listing URL or 'My Postings' page URL (from config file)
+- 48-hour cron trigger signal from launchd
+- Live network connection to craigslist.org
+
+**Process**
+- 1. macOS cron fires the Python script
+- 2. Script reads config file for listing URL; loads credentials from macOS Keychain
+- 3. Playwright launches headless Chromium
+- 4. Script navigates to Craigslist login page and authenticates
+- 5. Script navigates to the active tutoring listing via 'My Postings'
+- 6. Script clicks the Repost button and steps through any confirmation dialogs
+- 7. Script asserts the listing's new post date equals today's date
+- 8. Script writes a timestamped log entry (SUCCESS or FAILURE) and exits
+
+**Outputs**
+- Craigslist tutoring listing with a refreshed (current-day) post timestamp
+- Timestamped log entry recording outcome and run duration
+- Optional: macOS desktop notification on failure
+
+**Customers**
+- Adi — benefits from the listing remaining visible in Craigslist search results without any manual effort
+
+## CTQ Tree
+
+- **Need:** Tutoring listing stays near the top of Craigslist search results → **Driver:** Listing must be reposted every 48 hours without any manual intervention → **Target:** ≥ 95% of scheduled cron runs result in a confirmed successful repost over any rolling 30-day window (max 1 failure per 20 runs)
+- **Need:** Automation runs silently without disrupting laptop work → **Driver:** Script must execute entirely in headless mode and finish in a short, bounded time → **Target:** 100% of runs use headless Playwright with no visible browser window; every run completes in under 3 minutes as recorded in the log
+- **Need:** Craigslist credentials remain secure at all times → **Driver:** Login credentials must never be exposed in plaintext in any file, script, or shell history → **Target:** Zero plaintext credential occurrences detected by grep scan of the project directory and crontab at deploy time and at each 90-day control check
 
 ---
 
-_Craigslist Tutoring Listing Auto-Renewer: Playwright + cron script that logs in and clicks Renew every 48 hours on macOS, with local file logging and desktop failure notifications.
-Tier: Standard | Mode: greenfield | Size: M
-6 DMAIC phases: Define → Measure → Analyze → Improve → Implement → Control_
+_Craigslist tutoring-listing auto-reposter: a Python 3.11 + Playwright script that logs in and clicks Repost every 48 hours via macOS cron, eliminating a recurring 3–5 min manual task with secure credential storage and structured logging. | Tier: Standard | Mode: greenfield | Size: M | 6 DMAIC phases (Define → Measure → Analyze → Improve → Implement → Control)._
