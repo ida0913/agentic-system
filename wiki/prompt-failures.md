@@ -86,3 +86,18 @@ Full test suite: 31 passed. No debug lines in production code. `_validate_resolv
 - **recurring:** single-observation
 - **fix_applied:** Reworded `ARCHITECT_SYSTEM` section 4 in `prompts/architect.py` to say the decision is listed "as an explicit decision" (not "[OPERATOR DECISION]") and explicitly state the renderer adds the marker automatically — the model must not include that literal text in the `decision` field. Added a matching line to VALIDATION NOTES. The renderer (`_write_design`) is unchanged and remains the single source of the marker.
 - **status:** fixed
+
+---
+
+## PF-006
+
+- **date:** 2026-06-30
+- **agent:** Architect (tendency also present in PM Phase 2)
+- **prompt_section:** ARCHITECT_SYSTEM — output depth is not scaled to tier
+- **failure_class:** over-processing / no-tier-scaling
+- **severity:** low (no correctness or routing impact; cost + latency + Lean concern)
+- **what_happened:** The Architect produces the same comprehensive output depth regardless of assessed tier. For a Standard project (Craigslist renewer) it emitted 8 components, a setup.sh, and 5 operator decisions — heavier than the work warrants. The tier system exists to right-size process, but the Architect doesn't act on the tier it just assessed. Flagged independently by operator observation and prior cross-model reviews (over-processing tendency).
+- **evidence:** architect-smoke DESIGN.md; ~2-4 min generation, large output
+- **recurring:** yes — consistent with PM Phase 2's comprehensiveness (16K-char PRDs)
+- **fix_applied:** tier-scaled output added to ARCHITECT_SYSTEM: explicit right-size instruction, per-tier scaling of tech-stack-option count / design-doc depth / operator-decisions, plus a tier-aware validator floor (`_validate_tier_assessment` in `agents_architect.py`: >= 1 tech-stack option for Micro, >= 2 for Standard/Full, keyed off `recommended_tier`). Covered by new tests in `tests/test_architect.py` (Micro 1-option pass, Micro 0-option fail, Full 1-option fail). Verified via `desloppify show` that the changed files (`prompts/architect.py`, `agents_architect.py`, `test_architect.py`) carry zero open findings — see `wiki/DEBT.md` DEBT-001 for the unrelated pre-existing debt this scan also surfaced.
+- **status:** fixed

@@ -76,7 +76,9 @@ def _validate_tier_assessment(parsed: dict[str, Any]) -> None:
     - verdict must be exactly "agree" or "challenge".
     - current_tier and recommended_tier must each be Micro / Standard / Full.
     - When verdict is "agree", recommended_tier must equal current_tier.
-    - tech_stack_options must contain at least 2 entries.
+    - tech_stack_options must contain at least 1 entry if recommended_tier is
+      "Micro", and at least 2 entries if recommended_tier is "Standard" or "Full"
+      (output depth scales with the tier the Architect lands on).
     """
     if "tier_assessment" not in parsed:
         raise LLMParseError("reply missing required key: 'tier_assessment'")
@@ -106,9 +108,11 @@ def _validate_tier_assessment(parsed: dict[str, Any]) -> None:
         )
 
     options = parsed.get("tech_stack_options", [])
-    if len(options) < 2:
+    min_options = 1 if recommended_tier == "Micro" else 2
+    if len(options) < min_options:
         raise LLMParseError(
-            f"tech_stack_options must contain >= 2 entries, got {len(options)}"
+            f"tech_stack_options must contain >= {min_options} entries for "
+            f"recommended_tier {recommended_tier!r}, got {len(options)}"
         )
 
 

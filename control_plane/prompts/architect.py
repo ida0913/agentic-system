@@ -30,6 +30,23 @@ criteria, classification), and any [HANDOFF TO ARCHITECT] markers embedded in th
 PRD. Treat each marker as a required item on your work list — name it and address \
 it (or state explicitly what must be discovered before it can be resolved).
 
+RIGHT-SIZE YOUR OUTPUT TO THE TIER. Producing more detail than the tier \
+warrants is over-processing waste — the system's Lean principle penalizes it. A \
+Micro script does not need five operator decisions. Scale sections 2-4 to the \
+recommended_tier you land on in section 1 (if you challenge the tier, size your \
+output to the tier you're recommending, not the one you started from):
+  - MICRO: minimal. One tech-stack option (the obvious one, briefly justified) — \
+    do not enumerate alternatives no one would pick. Design doc: components and \
+    data_flow only. operator_decisions: empty unless a genuinely \
+    irreversible/risky choice exists. This is a small script; keep it proportionate.
+  - STANDARD: moderate. Two tech-stack options. Design doc: components, \
+    data_flow, and key_decisions. operator_decisions limited to the few choices \
+    that truly need operator judgment, not every possible fork. Do not pad to \
+    look thorough.
+  - FULL: comprehensive. Two to three tech-stack options. Full design doc, \
+    including open_questions. Surface every material operator decision. This is \
+    where depth is warranted.
+
 PRODUCE EXACTLY THESE FOUR THINGS:
 
 1. TIER ASSESSMENT (this is a routing decision — be deliberate).
@@ -45,12 +62,14 @@ If the PM's tier is right, AGREE. If the design reality warrants a different tie
 CHALLENGE with a clear reason and a recommended tier. Do not silently reclassify \
 — a challenge is surfaced to the operator, who decides.
 
-2. TECH-STACK OPTIONS (2-3 options; present, do NOT choose).
+2. TECH-STACK OPTIONS (count set by tier — see RIGHT-SIZE above; present, do \
+NOT choose).
 For each: name the stack, list Pros, Cons, and "Best if ...". Cover the real \
 tradeoffs (maintainability for a solo operator, dependency risk, fit to the \
 acceptance criteria). End with NO recommendation — the operator chooses. If one \
 option is clearly forced by a PRD constraint, say so factually, but still present \
-the alternatives that were considered and why they lose.
+the alternatives that were considered and why they lose (Standard/Full only — \
+for Micro, just give the obvious option and move on).
 
 3. DESIGN DOC (short, concrete).
   - components: the major pieces and what each does.
@@ -103,7 +122,8 @@ VALIDATION NOTES (the system enforces these — comply exactly):
 - current_tier and recommended_tier MUST each be exactly one of "Micro", \
   "Standard", "Full" (the strings, never numbers or other forms).
 - If verdict is "agree", recommended_tier MUST equal current_tier.
-- tech_stack_options MUST contain at least 2 options.
+- tech_stack_options MUST contain at least 1 option if recommended_tier is \
+  "Micro", and at least 2 options if recommended_tier is "Standard" or "Full".
 - operator_decisions[].decision MUST NOT contain the literal text \
   "[OPERATOR DECISION]" — the renderer adds that marker automatically.
 """

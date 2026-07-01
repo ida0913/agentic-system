@@ -83,6 +83,31 @@ VALID_REPLY = json.dumps({
     "summary_card": "Standard tier confirmed.\n2 stack options presented.\n1 operator decision raised.",
 })
 
+MICRO_REPLY = json.dumps({
+    "tier_assessment": {
+        "verdict": "agree",
+        "current_tier": "Micro",
+        "recommended_tier": "Micro",
+        "reason": "Single trivial script, no persistence, no external integration.",
+    },
+    "tech_stack_options": [
+        {
+            "name": "Python stdlib script",
+            "pros": ["No dependencies", "Trivial to run"],
+            "cons": ["None material at this scope"],
+            "best_if": "A one-off local script is all that's needed.",
+        },
+    ],
+    "design_doc": {
+        "components": ["Single script"],
+        "data_flow": "CLI invocation -> read input -> print output",
+        "key_decisions": [],
+        "open_questions": [],
+    },
+    "operator_decisions": [],
+    "summary_card": "Micro tier confirmed.\n1 stack option presented.\n0 operator decisions raised.",
+})
+
 CHALLENGE_REPLY = json.dumps({
     "tier_assessment": {
         "verdict": "challenge",
@@ -237,14 +262,75 @@ def test_agree_tier_mismatch_returns_failure(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — Fewer than 2 stack options → validation fails → FAILED
+# Test 5 — Fewer than 2 stack options for a Standard/Full tier → validation
+#           fails → FAILED (the >= 2 floor still applies above Micro)
 # ---------------------------------------------------------------------------
 
 def test_too_few_stack_options_returns_failure(tmp_path: Path) -> None:
     orch, store, queue = _wire(tmp_path)
 
-    bad = json.loads(VALID_REPLY)
+    bad = json.loads(VALID_REPLY)  # recommended_tier == "Standard"
     bad["tech_stack_options"] = bad["tech_stack_options"][:1]  # only 1 option
+
+    with patch(
+        "control_plane.agents_architect.call_claude", return_value=json.dumps(bad)
+    ):
+        header = orch.run_to_gate()
+
+    assert header.current_state is State.FAILED
+
+
+# ---------------------------------------------------------------------------
+# Test 5a — Micro tier: 1 stack option is sufficient and validates
+# ---------------------------------------------------------------------------
+
+def test_micro_tier_one_option_validates(tmp_path: Path) -> None:
+    orch, store, queue = _wire(tmp_path)
+    store.write_detail({"_classification": {**_CLASSIFICATION, "tier": "Micro"}})
+
+    with patch("control_plane.agents_architect.call_claude", return_value=MICRO_REPLY):
+        header = orch.run_to_gate()
+
+    assert header.current_state is State.DESIGN_REVIEW
+
+    detail = store.read_detail()
+    design = detail["design"]
+    assert design["tier_assessment"]["recommended_tier"] == "Micro"
+    assert len(design["tech_stack_options"]) == 1
+    assert design["operator_decisions"] == []
+
+
+# ---------------------------------------------------------------------------
+# Test 5b — Micro tier: 0 stack options still fails (floor is >= 1, not >= 0)
+# ---------------------------------------------------------------------------
+
+def test_micro_tier_zero_options_returns_failure(tmp_path: Path) -> None:
+    orch, store, queue = _wire(tmp_path)
+    store.write_detail({"_classification": {**_CLASSIFICATION, "tier": "Micro"}})
+
+    bad = json.loads(MICRO_REPLY)
+    bad["tech_stack_options"] = []
+
+    with patch(
+        "control_plane.agents_architect.call_claude", return_value=json.dumps(bad)
+    ):
+        header = orch.run_to_gate()
+
+    assert header.current_state is State.FAILED
+
+
+# ---------------------------------------------------------------------------
+# Test 5c — Full tier: 1 stack option is insufficient (>= 2 floor applies)
+# ---------------------------------------------------------------------------
+
+def test_full_tier_one_option_returns_failure(tmp_path: Path) -> None:
+    orch, store, queue = _wire(tmp_path)
+    store.write_detail({"_classification": {**_CLASSIFICATION, "tier": "Full"}})
+
+    bad = json.loads(VALID_REPLY)
+    bad["tier_assessment"]["current_tier"] = "Full"
+    bad["tier_assessment"]["recommended_tier"] = "Full"
+    bad["tech_stack_options"] = bad["tech_stack_options"][:1]
 
     with patch(
         "control_plane.agents_architect.call_claude", return_value=json.dumps(bad)
