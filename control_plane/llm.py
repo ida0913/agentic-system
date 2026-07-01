@@ -62,10 +62,10 @@ def call_claude(system: str, user: str, model: str, max_tokens: int) -> str:  # 
             input=user,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=300,
         )
     except subprocess.TimeoutExpired as exc:
-        raise LLMError("claude CLI timed out after 180 s") from exc
+        raise LLMError("claude CLI timed out after 300 s") from exc
 
     if result.returncode != 0:
         snippet = (result.stderr or result.stdout or "")[:300]

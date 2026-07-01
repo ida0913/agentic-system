@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from .agents_architect import ArchitectAgent
 from .agents_pm import PMAgent
 from .protocol import Agent, AgentResult
 from .state import StateHeader
@@ -79,4 +80,5 @@ def live_registry() -> dict[str, Agent]:
     """
     registry = default_registry()
     registry["PM"] = PMAgent()
+    registry["Architect"] = ArchitectAgent()
     return registry

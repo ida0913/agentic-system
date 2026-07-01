@@ -71,3 +71,18 @@ are appended as new entries. This is the same append-only discipline as decision
 - Run 3: `resolved_operation = "Renew existing Craigslist tutoring listing timestamp by clicking the Renew button every 48 hours"` — out_of_scope includes "Delete-and-repost / listing recreation"
 
 Full test suite: 31 passed. No debug lines in production code. `_validate_resolved_operation` strictly rejects absent/empty field (raises `LLMParseError` → `ok=False` → retry path). **Status: fixed.**
+
+---
+
+## PF-005
+
+- **date:** 2026-06-30
+- **agent:** Architect
+- **prompt_section:** ARCHITECT_SYSTEM — OPERATOR DECISIONS block (section 4)
+- **failure_class:** rendering-duplication
+- **severity:** low (cosmetic; no reasoning or routing impact)
+- **what_happened:** Operator-decision headers in `DESIGN.md` rendered the `[OPERATOR DECISION]` marker twice (`[OPERATOR DECISION] [OPERATOR DECISION] <title>`). Root cause: `ARCHITECT_SYSTEM` instructed the model to list each entry "as an explicit `[OPERATOR DECISION]`", which the model interpreted as embedding the literal marker text inside the `decision` field. `_write_design()` in `agents_architect.py` then prepended the same marker when rendering the `## Operator Decisions` section, doubling it.
+- **evidence:** First live Architect run (`architect-smoke`); `state.detail.json` showed `operator_decisions[].decision` values already prefixed with `"[OPERATOR DECISION] ..."` (e.g. `"[OPERATOR DECISION] Scheduler mechanism: cron vs. launchd"`); `DESIGN.md` then rendered `### [OPERATOR DECISION] [OPERATOR DECISION] Scheduler mechanism: cron vs. launchd`.
+- **recurring:** single-observation
+- **fix_applied:** Reworded `ARCHITECT_SYSTEM` section 4 in `prompts/architect.py` to say the decision is listed "as an explicit decision" (not "[OPERATOR DECISION]") and explicitly state the renderer adds the marker automatically — the model must not include that literal text in the `decision` field. Added a matching line to VALIDATION NOTES. The renderer (`_write_design`) is unchanged and remains the single source of the marker.
+- **status:** fixed

@@ -1,0 +1,16 @@
+{
+  "project_id": "architect-smoke",
+  "tier": "Standard",
+  "mode": "greenfield",
+  "current_state": "DESIGN_REVIEW",
+  "status": "AWAITING_OPERATOR",
+  "owner_agent": "ReviewPanel",
+  "complexity": "S",
+  "retry_count": 0,
+  "fix_cycle_count": 0,
+  "budget_status": "OK",
+  "open_gates": [
+    "d7515a87fc8b"
+  ],
+  "version": 9
+}

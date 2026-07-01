@@ -13,6 +13,8 @@ from typing import Any, Callable, Protocol
 
 from .state import StateHeader
 
+VALID_TIERS = {"Micro", "Standard", "Full"}
+
 
 @dataclass
 class AgentResult:

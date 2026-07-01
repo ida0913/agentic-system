@@ -1,0 +1,35 @@
+[
+  {
+    "gate": "PM_CLARIFY",
+    "project_id": "architect-smoke",
+    "action": "Operator must answer clarifying questions before the PRD can be drafted. See 'questions' in the project detail blob.",
+    "risk_class": "low",
+    "requested_by": "PM",
+    "status": "GRANTED",
+    "decided_by": "smoke-operator",
+    "id": "6c17dfaf5fbd",
+    "created_at": 1782848068.3274891
+  },
+  {
+    "gate": "PRD_APPROVAL",
+    "project_id": "architect-smoke",
+    "action": "advance DEFINE -> DESIGN",
+    "risk_class": "low",
+    "requested_by": "PM",
+    "status": "GRANTED",
+    "decided_by": "smoke-operator",
+    "id": "8969757778ac",
+    "created_at": 1782848312.254076
+  },
+  {
+    "gate": "DESIGN_APPROVAL",
+    "project_id": "architect-smoke",
+    "action": "advance DESIGN_REVIEW -> BUILD",
+    "risk_class": "medium",
+    "requested_by": "ReviewPanel",
+    "status": "PENDING",
+    "decided_by": null,
+    "id": "d7515a87fc8b",
+    "created_at": 1782848502.638647
+  }
+]

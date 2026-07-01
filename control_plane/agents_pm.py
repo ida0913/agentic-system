@@ -22,7 +22,7 @@ import textwrap
 from pathlib import Path
 from typing import Any, Callable
 
-from .protocol import AgentResult
+from .protocol import VALID_TIERS, AgentResult
 from .approvals import ApprovalQueue
 from .llm import DETAIL_KEY_CLARIFY_GATE, DETAIL_KEY_CLASSIFICATION, LLMError, LLMParseError, call_claude, parse_json
 from .prompts.pm import PM_MAX_TOKENS, PM_MODEL, PM_PHASE1_SYSTEM, PM_PHASE2_SYSTEM
@@ -168,7 +168,6 @@ _COMPLEXITY_COERCE: dict[str, str] = {
     "l": "L", "large": "L",
     "xl": "XL", "extra-large": "XL", "extralarge": "XL", "extra_large": "XL",
 }
-_VALID_TIERS = {"Micro", "Standard", "Full"}
 _VALID_MODES = {"greenfield", "improvement"}
 _VALID_COMPLEXITIES = {"S", "M", "L", "XL"}
 
@@ -176,7 +175,7 @@ _VALID_COMPLEXITIES = {"S", "M", "L", "XL"}
 def _coerce_classification(cls: dict) -> dict:
     """Coerce obvious model drift in classification enum fields; raise on unrecognised values."""
     tier = str(cls.get("tier", ""))
-    if tier not in _VALID_TIERS:
+    if tier not in VALID_TIERS:
         coerced = _TIER_COERCE.get(tier.lower()) or _TIER_COERCE.get(tier)
         if coerced is None:
             raise LLMParseError(f"unrecognised tier {tier!r}; expected Micro/Standard/Full")

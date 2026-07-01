@@ -1,0 +1,361 @@
+{
+  "request": "Automate reposting my tutoring listing to Craigslist every 48 hours.",
+  "questions": [
+    "When you say 'repost,' do you mean clicking the existing listing's Renew button (Craigslist surfaces this every 48 h on active posts) or deleting the old listing and submitting a brand-new one each cycle? This is the single biggest scope driver \u2014 renew is a 2-click flow; full re-create requires filling out the whole form.",
+    "Where should this automation run: your personal Mac/PC (must be on and awake), a VPS/home server you already have, or a cloud-scheduled agent spun up on demand? If your machine sleeps at night, a local scheduler won't fire reliably.",
+    "Do you post under a registered Craigslist account (email + password login) or via anonymous one-off email confirmations? This determines how credentials are stored and whether the bot can navigate to 'your listings' to find the renew button.",
+    "What should happen on failure \u2014 e.g., Craigslist shows a CAPTCHA, changes its UI, or the post gets flagged? Options: Slack-alert you immediately and stop, retry N times silently, or log the failure and keep trying until you manually intervene."
+  ],
+  "provisional": {
+    "tier": "Standard",
+    "mode": "greenfield",
+    "physical": false,
+    "complexity": "M"
+  },
+  "reasoning_note": "Craigslist has no public API and actively blocks automation, so the renew-vs-recreate decision and execution environment together determine whether this is a straightforward Playwright script on a cron or a hardened, CAPTCHA-aware cloud agent \u2014 two very different PRDs.",
+  "_pm_clarify_gate_id": "6c17dfaf5fbd",
+  "clarify_answers": {
+    "1": "Python 3.11 on macOS; Playwright is already installed.",
+    "2": "The listing body, title, and images stay identical \u2014 only the post timestamp needs refreshing.",
+    "3": "Browser automation (Playwright) is fine; no Craigslist API exists.",
+    "4": "Runs on my personal laptop via a cron job; no server or cloud deployment needed.",
+    "5": "Log each attempt (success/failure) to a local file; a terminal notification on failure is nice-to-have."
+  },
+  "prd": {
+    "overview_goals": "Build a Python 3.11 / Playwright script, scheduled via macOS cron, that logs in to Craigslist and clicks the Renew button on Adi's active tutoring listing every 48 hours to keep the post timestamp current. The system refreshes the post timestamp only; it does NOT delete, recreate, edit, or duplicate the listing in any way. Success means the listing reliably reappears near the top of Craigslist search results without any manual browser interaction from Adi.",
+    "problem_statement": "Craigslist deprioritizes older posts in search results; the only way to restore visibility is to click the Renew button every 48 hours. Doing this manually requires Adi to remember the exact 48-hour window, open a browser, log in, and click through the UI \u2014 a small but recurring interruption that is frequently missed or delayed, causing the tutoring listing to fall in rankings and reduce inbound student inquiries.",
+    "target_audience": "Internal \u2014 single operator (Adi)",
+    "success_metrics": [
+      "\u2265 95% of scheduled 48-hour renewal attempts complete successfully (Renew button clicked and confirmed by Craigslist) over any rolling 30-day window (\u2265 14 of 15 expected runs)",
+      "Script runtime per run \u2264 120 seconds from cron trigger to final log write under normal network conditions",
+      "100% of failed runs produce a structured local log entry within 60 seconds of the failure event, with a non-zero exit code captured by the macOS cron error channel"
+    ],
+    "features_requirements": {
+      "functional": [
+        "[must] Schedule-triggered Python/Playwright script that launches a headless Chromium session, logs in to Craigslist with stored credentials, navigates to the active tutoring listing, and clicks the Renew button",
+        "[must] Secure credential storage \u2014 credentials must not reside in plain-text source files; macOS Keychain or a permissions-restricted .env file (chmod 600) are acceptable approaches; final mechanism deferred to Architect phase",
+        "[must] Structured local log file capturing per run: UTC timestamp, outcome label (SUCCESS / FAILURE / NOT_YET_RENEWABLE), step number at failure, error type, and full stack trace on failure",
+        "[must] Non-zero exit code on any unrecoverable failure so macOS cron captures the event in system logs",
+        "[should] Guard condition: if the Renew button is absent or disabled (listing renewed < 48 h ago), log 'NOT_YET_RENEWABLE' and exit with code 0 without treating the run as a failure",
+        "[should] Single automatic retry on transient network errors or element-not-found timeouts before marking the run as FAILURE",
+        "[could] --dry-run CLI flag that completes all navigation steps up to but not including clicking Renew, then logs 'DRY RUN \u2014 no action taken' and exits 0",
+        "[could] One-command setup script that installs the cron entry, validates Python 3.11 and Playwright prerequisites, and prints the installed schedule for Adi to confirm",
+        "[wont] CAPTCHA solving or any bot-detection bypass \u2014 if a CAPTCHA is encountered the script logs 'CAPTCHA_DETECTED' and exits non-zero"
+      ],
+      "non_functional": [
+        "[must] Runs fully headless \u2014 no visible browser window during scheduled cron execution",
+        "[must] Script completes within 120 seconds under normal home-network conditions",
+        "[must] Credentials never written to unprotected plain-text disk files at any point in the execution path",
+        "[should] Script is idempotent \u2014 running it a second time within the 48-hour lock window produces the NOT_YET_RENEWABLE outcome, not an error or duplicate renewal"
+      ],
+      "usability": [
+        "[could] --dry-run flag lets Adi verify the full browser flow against the live Craigslist UI without submitting any renewal action",
+        "[could] Human-readable log format (ISO-8601 timestamps, clear outcome labels) reviewable with 'tail -f' or any text editor",
+        "[could] Setup script prints a confirmation summary of the installed cron schedule so Adi can visually verify the interval before the first live run"
+      ]
+    },
+    "user_journey": "TRIGGER: macOS cron fires at the configured 48-hour interval. \u2192 STEP 1: Python script launches a headless Playwright (Chromium) browser session. \u2192 STEP 2: Script navigates to the Craigslist login page and authenticates using credentials retrieved from secure storage. \u2192 STEP 3: Script navigates to the 'My Account / My Listings' page (or a direct listing URL if more reliable). [HANDOFF TO ARCHITECT: confirm the exact post-login navigation path; determine whether Craigslist redirects to a dashboard or requires an extra click to reach the listings table.] \u2192 STEP 4: Script locates the active tutoring listing row in the listings table. \u2192 STEP 5: Script checks whether the Renew button is currently active/clickable. If not available, logs NOT_YET_RENEWABLE and exits 0. \u2192 STEP 6: Script clicks the Renew button and handles any confirmation dialog (e.g., clicks the confirm/OK button). [HANDOFF TO ARCHITECT: identify stable CSS or XPath selectors for the Renew button and any confirmation dialog; identify the post-renewal confirmation signal \u2014 success banner text, URL change, or timestamp element update.] \u2192 STEP 7: Script verifies the renewal success signal. \u2192 STEP 8: Script writes a structured SUCCESS log entry and exits 0. \u2192 ON ANY FAILURE (any step above): script catches the exception after optional single retry, writes a structured FAILURE log entry with step number, error type, and stack trace, and exits non-zero.",
+    "assumptions_constraints": [
+      "Assumption: Adi has a registered Craigslist account (email + password); the system requires access to the 'My Listings' dashboard, which is only available to logged-in registered users \u2014 anonymous one-off post flows are out of scope",
+      "Assumption: Q1 (renew vs. delete-and-recreate) was answered obliquely via A2 ('only the post timestamp needs refreshing'); this is interpreted as definitively selecting the Renew button flow, not listing recreation",
+      "Assumption: Q4 (failure handling) was not answered; default behavior is local log-only with non-zero exit code \u2014 no active alerting (Slack, email, push) in this release; this can be added post-release",
+      "Assumption: The Mac is awake, logged in as Adi, and connected to the internet at cron fire time; sleep/wake management is the operator's responsibility \u2014 missed cron fires due to sleep are not recovered automatically",
+      "Constraint: Craigslist has no public API; all interaction is via Playwright browser automation against the live Craigslist HTML, which may change without notice and could break selectors",
+      "Constraint: No CAPTCHA-solving service is in scope; any CAPTCHA halts the run and requires Adi to manually renew once before the bot resumes",
+      "Constraint: Craigslist enforces a 48-hour lock between renewals; the script must tolerate the button being unavailable as a non-error condition",
+      "Constraint: Python 3.11 and Playwright are already installed on the operator's Mac; no runtime installation is required, only project-level dependencies",
+      "Constraint: macOS cron does not wake a sleeping machine; the Architect phase must evaluate launchd (with WakeForNetworkAccess) as a more reliable scheduler alternative"
+    ],
+    "competitive_context": "N/A \u2014 internal",
+    "out_of_scope": [
+      "Delete-and-repost / listing recreation \u2014 the system does NOT delete the existing listing and submit a new one under any circumstance",
+      "Editing or updating listing content \u2014 title, body text, images, category, price, and contact information are never read, modified, or resubmitted",
+      "Cloud or server deployment \u2014 no VPS, Docker container, cloud function, GitHub Actions, or any remote scheduler; local macOS cron only",
+      "Cross-platform execution \u2014 macOS only; no Windows or Linux support in this release",
+      "Multi-listing management \u2014 only the single active tutoring listing is targeted; generalization to other listings is not in scope",
+      "Posting to any platform other than Craigslist (e.g., Facebook Marketplace, Nextdoor, Wyzant)",
+      "CAPTCHA solving or bypass of any Craigslist bot-detection or rate-limiting mechanism",
+      "Active failure notifications (Slack, email, SMS, push notification) \u2014 local log file and cron stderr only in this release",
+      "Automatic credential rotation, 2FA handling, or OAuth flows",
+      "Any mobile automation via iOS or Android Craigslist apps"
+    ],
+    "acceptance_criteria": [
+      "AC-1 [Renewal success]: Given valid stored credentials and an active tutoring listing whose Renew button is available, when the script runs, the listing timestamp on Craigslist updates to the current date, a SUCCESS entry appears in the local log file, and the script exits 0 \u2014 all within 120 seconds of invocation.",
+      "AC-2 [Not-yet-renewable guard]: Given the listing was renewed less than 48 hours ago (Renew button absent or disabled), when the script runs, it exits with code 0, writes a NOT_YET_RENEWABLE log entry, and performs no click actions on the page.",
+      "AC-3 [Failure logging]: Given any unrecoverable error (login failure, selector not found after retry, unexpected page state, CAPTCHA detected), the script exits with a non-zero status code and the log file contains a structured FAILURE entry including UTC timestamp, step number, error type, and full stack trace.",
+      "AC-4 [Dry-run mode]: Given the --dry-run flag, the script completes all navigation and verification steps up to but not including clicking Renew, logs 'DRY RUN \u2014 no action taken,' exits 0, and the Craigslist listing timestamp is unchanged.",
+      "AC-5 [Headless execution]: When invoked via the installed cron entry (no interactive terminal), the script runs to completion without opening any visible browser window, confirmed by macOS window manager inspection during a test run.",
+      "AC-6 [Cron scheduling fires correctly]: The installed cron entry (or launchd plist) fires the script within \u00b15 minutes of the target 48-hour interval on a non-sleeping Mac, verified across at least 2 consecutive successful cycles in the operator's environment."
+    ]
+  },
+  "resolved_operation": "Clicking the Craigslist Renew button on the active tutoring listing every 48 hours",
+  "dmaic_plan": [
+    {
+      "phase": "Define",
+      "deliverables": [
+        "PRD with resolved operation, scope boundaries, and acceptance criteria",
+        "SIPOC diagram",
+        "CTQ tree",
+        "Classification (tier / mode / complexity / physical)"
+      ],
+      "owner": "PM",
+      "entry": "Operator has answered clarifying questions",
+      "exit": "PRD reviewed and accepted by Adi; resolved operation committed; no open scope ambiguities"
+    },
+    {
+      "phase": "Measure",
+      "deliverables": [
+        "Manual baseline: estimated time per renewal session (login \u2192 navigate \u2192 click \u2192 confirm), estimated weekly time cost, and qualitative miss-rate (how often the 48-hour window lapses before Adi renews manually)",
+        "Craigslist UI audit: live browser inspection recording of the full manual renewal flow \u2014 login page URL, post-login redirect path, 'My Listings' page URL, Renew button HTML attributes and at least two stable selector candidates, confirmation dialog markup and selector",
+        "Confirmation signal inventory: identify the success indicator Craigslist returns after renewal (banner text, URL change, timestamp element update)",
+        "Risk register: observed CAPTCHA frequency, login session cookie lifespan, estimated Craigslist HTML change cadence"
+      ],
+      "owner": "Architect",
+      "entry": "Define phase exit: PRD accepted by Adi",
+      "exit": "Manual baseline documented with time estimates; at least two stable selector candidates for the Renew button and confirmation signal confirmed via browser DevTools inspection on the live site"
+    },
+    {
+      "phase": "Analyze",
+      "deliverables": [
+        "Failure mode and effects analysis (FMEA) covering: CAPTCHA appearance, Craigslist HTML/selector drift, macOS sleep/wake scheduling gaps, login session expiry, 48-hour lock detection edge cases",
+        "Selector stability assessment: rank candidate selectors by fragility; recommend primary and fallback selectors",
+        "Scheduling mechanism decision: cron vs. launchd (with WakeForNetworkAccess) evaluated for reliability on a Mac that may sleep overnight; recommendation with rationale",
+        "Mitigation strategy assigned to each identified failure mode"
+      ],
+      "owner": "Architect",
+      "entry": "Measure exit: baseline documented and selectors confirmed",
+      "exit": "All critical failure modes have assigned mitigations; scheduling mechanism (cron vs. launchd) decided with documented rationale"
+    },
+    {
+      "phase": "Improve",
+      "deliverables": [
+        "Script architecture design document: module breakdown (auth, navigator, renewer, logger, retry handler), credential storage mechanism (Keychain vs. restricted .env), dry-run flag interface specification",
+        "Logging schema definition: field names, types, and example entries for SUCCESS / FAILURE / NOT_YET_RENEWABLE / DRY_RUN outcomes",
+        "Scheduler configuration design: cron expression or launchd .plist template, stdout/stderr capture method, environment variable passing strategy",
+        "Engineer handoff package: design doc + ranked selector list + credential storage spec + confirmation signal spec"
+      ],
+      "owner": "Architect",
+      "entry": "Analyze exit: all failure modes mitigated and scheduling mechanism decided",
+      "exit": "Design document reviewed and approved by Adi; Engineer handoff package is complete and self-contained \u2014 no further design decisions required from Engineer"
+    },
+    {
+      "phase": "Implement",
+      "deliverables": [
+        "Python 3.11 / Playwright renewal script satisfying all functional and non-functional requirements",
+        "Credential storage integration per Architect-specified mechanism (Keychain or restricted .env)",
+        "Structured local log file with all schema-defined fields per run",
+        "--dry-run flag implementation",
+        "macOS cron entry or launchd .plist installed and smoke-tested",
+        "Setup script (one-command installation and prerequisite validation)",
+        "README with first-run verification steps and log file location"
+      ],
+      "owner": "Engineer",
+      "entry": "Improve exit: Engineer handoff package delivered",
+      "exit": "All six acceptance criteria (AC-1 through AC-6) pass on Adi's machine; first live renewal run produces a SUCCESS log entry with timestamp matching current date on Craigslist"
+    },
+    {
+      "phase": "Control",
+      "deliverables": [
+        "First-5-runs monitoring log: outcome, runtime, anomalies, and Adi sign-off for each of the first five scheduled runs",
+        "Runbook covering operator response to: CAPTCHA detected, Renew button selector broken by UI change, credential rotation needed, cron/launchd fire missed because Mac was asleep",
+        "Weekly log review checklist: 30-second procedure for Adi to confirm the most recent run succeeded",
+        "Go/no-go sign-off memo after 5 consecutive successful runs"
+      ],
+      "owner": "Engineer / Adi",
+      "entry": "Implement exit: all acceptance criteria passed on operator's machine",
+      "exit": "5 consecutive successful renewal runs logged with no manual intervention; runbook reviewed and accepted by Adi; system declared operational"
+    }
+  ],
+  "sipoc": {
+    "suppliers": [
+      "macOS system clock / cron scheduler or launchd (provides the 48-hour trigger)",
+      "Craigslist web UI (target system supplying the Renew button and confirmation signal)",
+      "Adi (supplies account credentials and the initial listing)",
+      "Python 3.11 runtime (pre-installed on operator's Mac)",
+      "Playwright / Chromium browser engine (pre-installed on operator's Mac)"
+    ],
+    "inputs": [
+      "48-hour cron or launchd trigger signal",
+      "Craigslist account email and password retrieved from secure credential storage",
+      "Craigslist 'My Listings' page URL or direct listing URL",
+      "Playwright browser context and Chromium session",
+      "CSS / XPath selectors for the Renew button and confirmation signal (hardcoded from Measure phase)"
+    ],
+    "process": [
+      "1. cron / launchd fires the Python script at the scheduled 48-hour interval",
+      "2. Script launches a headless Chromium session via Playwright",
+      "3. Script navigates to Craigslist login page and authenticates with stored credentials",
+      "4. Script navigates to 'My Account / My Listings' page",
+      "5. Script locates the active tutoring listing row",
+      "6. Script checks Renew button availability; logs NOT_YET_RENEWABLE and exits 0 if unavailable",
+      "7. Script clicks Renew button and confirms any resulting dialog",
+      "8. Script verifies the post-renewal confirmation signal",
+      "9. Script writes structured log entry (SUCCESS / FAILURE) and exits with appropriate code"
+    ],
+    "outputs": [
+      "Refreshed listing timestamp on Craigslist (primary business outcome \u2014 listing surfaces near top of search results)",
+      "Structured local log entry per run with outcome label, UTC timestamp, runtime, and error details on failure",
+      "Non-zero exit code on failure (captured by macOS cron / launchd error channel for passive monitoring)"
+    ],
+    "customers": [
+      "Adi (sole operator) \u2014 benefits from sustained tutoring listing visibility and elimination of the manual 48-hour renewal task"
+    ]
+  },
+  "ctq_tree": [
+    {
+      "need": "Tutoring listing stays visible near the top of Craigslist search results at all times",
+      "driver": "Renewal fires reliably on the 48-hour cycle without missed or delayed runs",
+      "measurable_target": "\u2265 95% of scheduled renewal attempts succeed over any rolling 30-day window (\u2265 14 of 15 expected runs complete with a SUCCESS log entry)"
+    },
+    {
+      "need": "Operator is not burdened with manual monitoring or surprise gaps in listing visibility",
+      "driver": "Every failure is immediately captured and surfaced through passive system channels without Adi needing to proactively check",
+      "measurable_target": "100% of failed runs produce a structured FAILURE log entry within 60 seconds of the error event; script exits non-zero so cron/launchd error email fires automatically"
+    },
+    {
+      "need": "Automation is fast and unobtrusive during normal laptop use",
+      "driver": "Script runs headless and completes quickly without competing for system resources",
+      "measurable_target": "Script runtime \u2264 120 seconds per run; zero visible browser windows opened during any scheduled execution"
+    }
+  ],
+  "gemba_guide": null,
+  "summary_card": "Headless Playwright + Python 3.11 cron bot that clicks the Craigslist Renew button on Adi's tutoring listing every 48 h \u2014 timestamp refresh only; no delete, recreate, or content edits; runs locally on Adi's Mac.\nTier: Standard | Mode: Greenfield | Complexity: S | Physical: false\n6-phase DMAIC plan: Define \u2192 Measure (manual baseline + UI audit) \u2192 Analyze \u2192 Improve \u2192 Implement \u2192 Control",
+  "links": {
+    "prd": "wiki/projects/architect-smoke/PRD.md"
+  },
+  "_classification": {
+    "tier": "Standard",
+    "mode": "greenfield",
+    "physical": false,
+    "complexity": "S"
+  },
+  "design": {
+    "tier_assessment": {
+      "verdict": "agree",
+      "current_tier": "Standard",
+      "recommended_tier": "Standard",
+      "reason": "The project is a single local script, but credential management (Keychain or restricted .env), structured log persistence, a scheduler integration (cron or launchd), and a meaningful anti-automation surface from Craigslist's bot detection all clear the Micro bar. There is no multi-service architecture, no PII exposure beyond stored login credentials, and no external API, so Full is not warranted."
+    },
+    "tech_stack_options": [
+      {
+        "name": "Python 3.11 + Playwright (vanilla, as PRD-specified)",
+        "pros": [
+          "Exactly what the PRD specifies; Python 3.11 and Playwright are already installed \u2014 zero additional runtime setup",
+          "Async API and built-in smart-wait strategies handle dynamic DOM reliably without explicit sleep calls",
+          "Rich selector engine (get_by_text, get_by_role, get_by_label) survives minor Craigslist HTML refactors better than raw CSS class selectors",
+          "Official Playwright dialog event listener handles native browser window.confirm() automatically with one line",
+          "Playwright's --headless flag and persistent browser context support are first-class features, not workarounds"
+        ],
+        "cons": [
+          "Playwright's bundled Chromium exposes navigator.webdriver and CDP signals by default; Craigslist's bot detection could fingerprint and CAPTCHA the session over time",
+          "No built-in stealth patching \u2014 the automation surface is wider than a real Chrome session"
+        ],
+        "best_if": "Craigslist does not aggressively fingerprint this specific personal-account renewal flow, and the operator accepts occasional CAPTCHA interruptions as a tolerable cost of the simplest possible stack."
+      },
+      {
+        "name": "Python 3.11 + Playwright + playwright-stealth",
+        "pros": [
+          "Stays within the already-installed Playwright ecosystem while patching the most common automation fingerprints: navigator.webdriver, Chrome runtime object, plugins list, language headers",
+          "Reduces CAPTCHA trigger probability without introducing a new browser binary or diverging from the PRD stack",
+          "One additional pip dependency (playwright-stealth); no other setup change"
+        ],
+        "cons": [
+          "playwright-stealth is a community library with intermittent maintenance \u2014 it can lag behind Playwright version increments and break silently on upgrade",
+          "Stealth patches are not exhaustive; Craigslist could still fingerprint via canvas entropy, font metrics, or TLS fingerprint differences between Playwright Chromium and real Chrome",
+          "Adds a dependency that must be audited for security and kept pinned"
+        ],
+        "best_if": "The operator wants a low-friction anti-fingerprint layer on top of Playwright to reduce CAPTCHA frequency, without switching to a different browser driver or binary."
+      },
+      {
+        "name": "Python 3.11 + Selenium + undetected-chromedriver",
+        "pros": [
+          "undetected-chromedriver is purpose-built to evade Selenium/CDP detection on major anti-bot systems; uses the operator's real installed Chrome binary, giving an identical TLS and browser fingerprint to a genuine session",
+          "Generally the strongest off-the-shelf anti-detection option for simple login-and-click flows without a paid proxy or fingerprint service",
+          "Persistent Chrome profile support is straightforward \u2014 cookies and session state survive across runs, reducing login frequency"
+        ],
+        "cons": [
+          "Diverges from the PRD-specified Playwright stack; adds Selenium and undetected-chromedriver on top of the existing environment",
+          "undetected-chromedriver must be pinned to a specific Chrome version; Chrome auto-updates silently on macOS and can break the pairing between driver and browser binary with no warning",
+          "Selenium's API is more verbose and synchronous; async patterns require explicit workarounds",
+          "Playwright's richer semantic selectors (get_by_role, get_by_text) are unavailable \u2014 selector fragility increases, raising the maintenance burden when Craigslist changes its HTML"
+        ],
+        "best_if": "Bot detection proves to be a persistent and blocking problem with Playwright even after stealth patching, and the operator is willing to take on Chrome version pinning as an ongoing maintenance task."
+      }
+    ],
+    "design_doc": {
+      "components": [
+        "renew.py \u2014 Main entry point: parses CLI flags (--dry-run), wires together all modules, runs the top-level orchestration loop with single-retry logic, writes the final log entry, and exits with the correct code",
+        "browser.py \u2014 Playwright session factory: launches headless Chromium (or applies stealth patches if that stack is chosen), sets a realistic viewport and user-agent string, and returns a configured page handle",
+        "credentials.py \u2014 Secure credential retrieval abstraction: hides whether the active backend is macOS Keychain (via keyring library) or a chmod-600 .env file; chosen mechanism is [OPERATOR DECISION]",
+        "auth.py \u2014 Login module: retrieves credentials via credentials.py, navigates to the Craigslist login URL, fills and submits the form, and asserts a logged-in state by checking the post-login URL or a logged-in DOM marker (e.g., presence of account menu)",
+        "listings.py \u2014 Navigation and action module: navigates to the confirmed My Listings URL (see open_questions), locates the target tutoring listing row by title text, checks Renew button availability, enforces the NOT_YET_RENEWABLE guard, accepts any confirmation dialog, verifies the post-renewal success signal, and handles the dry-run bypass",
+        "logger.py \u2014 Structured log writer: appends one record per run to a persistent local log file; mandatory fields: utc_timestamp (ISO-8601), outcome (SUCCESS / FAILURE / NOT_YET_RENEWABLE / DRY_RUN), step_number, error_type, stack_trace (null on success)",
+        "setup.sh (optional, [could] tier) \u2014 One-command setup script: validates Python 3.11 and Playwright installation, installs the cron entry or launchd plist, and prints the confirmed schedule for operator review",
+        "Scheduler entry \u2014 Either a crontab line or a launchd .plist in ~/Library/LaunchAgents with a 48-hour StartInterval; the scheduler choice is [OPERATOR DECISION] and is the single most architecturally significant configuration item"
+      ],
+      "data_flow": "TRIGGER (cron or launchd fires every 48 h) \u2192 renew.py invoked with optional --dry-run flag \u2192 credentials.py fetches username+password from Keychain or .env \u2192 browser.py opens headless Chromium page \u2192 auth.py navigates to Craigslist login URL, fills credentials, submits form, asserts logged-in DOM state \u2192 listings.py navigates to My Listings URL (direct URL preferred over dashboard clicking \u2014 see open_questions) \u2192 listings.py finds the tutoring listing row by title text \u2192 listings.py checks Renew button state: [ABSENT or DISABLED] \u2192 logger.py writes NOT_YET_RENEWABLE \u2192 exit 0; [PRESENT and ENABLED, dry-run=true] \u2192 logger.py writes DRY_RUN \u2192 exit 0; [PRESENT and ENABLED, dry-run=false] \u2192 listings.py clicks Renew \u2192 Playwright dialog listener accepts any confirm() popup \u2192 listings.py asserts success signal (banner text or timestamp change) \u2192 logger.py writes SUCCESS \u2192 exit 0. ON ANY EXCEPTION at any step: single automatic retry if the error is classified as transient (TimeoutError, NetworkError); if retry also fails \u2192 logger.py writes FAILURE record with step_number, error_type, full stack trace \u2192 exit non-zero \u2192 cron/launchd captures non-zero exit in system stderr log.",
+      "key_decisions": [
+        "Scheduler mechanism: cron vs. launchd plist \u2014 launchd with WakeForNetworkAccess is architecturally superior because standard cron does not fire on a sleeping Mac, which the PRD explicitly flags as a risk; this decision is [OPERATOR DECISION]",
+        "Credential storage: macOS Keychain via keyring library vs. chmod-600 .env file \u2014 Keychain is more secure but can silently fail under a cron/launchd non-GUI session if the login Keychain is locked; .env is simpler and reliable under automation but puts credentials on disk; this is [OPERATOR DECISION]",
+        "Anti-fingerprint strategy: directly coupled to tech stack choice \u2014 vanilla Playwright, Playwright+stealth, or Selenium+undetected-chromedriver; this is [OPERATOR DECISION]",
+        "Post-login navigation path: direct URL navigation (e.g., accounts.craigslist.org/login/home) is preferred over clicking through a dashboard for reliability and speed; the exact URL must be confirmed by live inspection and then hardcoded or placed in a config variable \u2014 this is a discovery task before implementation can begin",
+        "Renew button and listing-row selector strategy: text-based semantic selectors (Playwright get_by_text / get_by_role) are more resilient to Craigslist HTML refactors than CSS class selectors; recommended as the default approach, but final selectors require live DOM inspection by the operator or implementer",
+        "Confirmation dialog type: native browser window.confirm() (handled automatically via Playwright page.on('dialog')) vs. an HTML modal overlay (requires a separate locator click) \u2014 must be determined by live inspection; impacts listings.py dialog-handling code",
+        "Log file location and rotation policy: a fixed path under ~/Library/Logs/craigslist-renew/ is idiomatic on macOS; rotation strategy is [OPERATOR DECISION]",
+        "Target listing identification: the script should identify the tutoring listing by title text match within the listings table; if Adi has multiple listings, a configurable title substring or listing ID must be set in config to avoid acting on the wrong row"
+      ],
+      "open_questions": [
+        "[HANDOFF TO ARCHITECT \u2014 navigation path] The exact post-login URL and DOM structure of the Craigslist My Listings page cannot be resolved from the PRD alone. Discovery task (operator-assisted): log in manually to Craigslist, navigate to the listing management page, and record (a) the full stable URL \u2014 expected candidates are https://accounts.craigslist.org/login/home or a city-subdomain path like https://CITY.craigslist.org/mng; (b) whether the listing table loads synchronously in the page response or via a secondary XHR/fetch that requires an explicit wait; and (c) whether the direct manage URL for the specific tutoring listing (e.g., https://CITY.craigslist.org/mng/LISTING_ID) is a more reliable navigation target than the account dashboard. This URL must be confirmed before implementation of listings.py can begin.",
+        "[HANDOFF TO ARCHITECT \u2014 Renew button selectors and success signal] Craigslist HTML class names are not stable across deployments. Discovery task (operator-assisted): open DevTools on the My Listings page and record (a) the element type and visible text of the Renew button \u2014 expected: a <button> or <a> element containing the text 'renew' (case-insensitive); (b) a sibling element or row attribute that uniquely identifies the tutoring listing row, such as the listing title text or a data-id attribute; (c) whether clicking Renew triggers a native browser window.confirm() dialog (Playwright handles this automatically) or an HTML modal overlay (requires an additional locator); and (d) the post-renewal success signal \u2014 expected candidates are a success banner containing text like 'Your post has been renewed', a URL change, or the listing's posted-date element updating to today's date. These findings directly determine the implementation of listings.py.",
+        "Craigslist anti-bot posture for this specific account is unknown until first execution. If Craigslist begins presenting CAPTCHAs, the script exits non-zero and Adi must renew manually \u2014 this risks breaking the \u226595% success-rate acceptance criterion. The operator must explicitly accept this risk before implementation starts [see OPERATOR DECISIONS].",
+        "2FA and new-device login challenges: if Adi's Craigslist account triggers an email verification step when a headless browser session appears as a new device, the script cannot complete login and will fail at auth.py. The operator should confirm before implementation whether the account has any 2FA, email confirmation, or new-device challenge enabled, and if so, whether a persistent browser profile (saved cookies) can be used to pre-authenticate and avoid repeated login challenges.",
+        "Whether the tutoring listing's direct manage URL is stable: the listing ID should not change on renewal (only on delete+repost), making a hardcoded direct URL a reliable and faster navigation target than scanning the dashboard table. Operator should record this URL as a config fallback."
+      ]
+    },
+    "operator_decisions": [
+      {
+        "decision": "[OPERATOR DECISION] Scheduler mechanism: cron vs. launchd",
+        "options": [
+          "macOS cron (crontab entry every 48 h): simpler to configure, universally understood, no plist file \u2014 does NOT fire when the Mac is asleep; missed fires are permanently lost with no catch-up",
+          "macOS launchd (.plist in ~/Library/LaunchAgents with StartInterval=172800 and optionally WakeForNetworkAccess=true): more complex to configure as a plist file, but can wake the Mac from sleep to fire the job and optionally catches up missed runs \u2014 directly addresses the risk the PRD flags in assumptions"
+        ],
+        "why_it_matters": "A sleeping Mac silently skips cron fires, which will break the \u226595% success-rate acceptance criterion if Adi's Mac sleeps during any 48-hour window. This is an irreversible architectural choice \u2014 switching from cron to launchd later requires rewriting the scheduler integration and setup script."
+      },
+      {
+        "decision": "[OPERATOR DECISION] Credential storage mechanism",
+        "options": [
+          "macOS Keychain via the 'keyring' Python library: credentials never touch the filesystem as plaintext; most secure \u2014 but Keychain access under a cron/launchd non-GUI session can silently fail if the login Keychain is locked (e.g., after a reboot before first login), causing auth.py to error rather than the renewal step",
+          "chmod-600 .env file (readable only by Adi's OS user): simpler, no additional library dependency, works reliably under cron/launchd without any GUI or Keychain unlock dependency \u2014 credentials exist as plaintext on disk, protected only by filesystem permissions and full-disk encryption"
+        ],
+        "why_it_matters": "Keychain silent failure under automated sessions is a real reliability risk that could cause the script to fail at the credentials step on every run after a reboot \u2014 breaking the acceptance criteria in a non-obvious way. This is a security vs. reliability tradeoff with no universally correct answer for a single-operator local script."
+      },
+      {
+        "decision": "[OPERATOR DECISION] Anti-fingerprint and anti-bot strategy (tied to tech stack choice)",
+        "options": [
+          "Vanilla Playwright (no stealth patches): simplest, already installed, zero maintenance overhead \u2014 accepted risk that Craigslist may eventually CAPTCHA the session",
+          "Playwright + playwright-stealth: one additional pip dependency, patches most common automation signals \u2014 partial mitigation with some community-maintenance risk",
+          "Selenium + undetected-chromedriver: strongest anti-detection, uses real Chrome binary \u2014 diverges from PRD-specified Playwright stack, introduces Chrome version pinning as an ongoing maintenance burden"
+        ],
+        "why_it_matters": "If Craigslist's bot detection triggers a CAPTCHA, every affected run exits non-zero and Adi must manually renew once to reset the session. Frequent CAPTCHAs would break the \u226595% success-rate criterion. The choice made here directly determines how often human intervention will be required over the life of the system."
+      },
+      {
+        "decision": "[OPERATOR DECISION] Accept Craigslist Terms of Service / anti-automation risk",
+        "options": [
+          "Proceed with implementation: the script automates browser actions on Craigslist, which likely violates Craigslist's Terms of Service (automated access prohibition). Enforcement risk for a single personal listing renewed modestly (once every 48 h) is generally low, but Craigslist could flag the account, ghost the listing, or temporarily suspend posting privileges without notice",
+          "Do not proceed: renew the listing manually every 48 hours via a browser"
+        ],
+        "why_it_matters": "This risk is asymmetric and irreversible \u2014 if Craigslist flags and suspends the account or the listing, the tutoring post could be permanently lost and a new listing would need to be created. The operator must explicitly accept this risk before any implementation work begins."
+      },
+      {
+        "decision": "[OPERATOR DECISION] Log file rotation and retention policy",
+        "options": [
+          "No rotation: log file grows unbounded \u2014 at ~15 entries per month the file is small for years, but there is no automatic cleanup",
+          "Python RotatingFileHandler (configurable maxBytes + backupCount): log is capped automatically at implementation time; runs beyond the cap are permanently lost",
+          "Manual periodic pruning by Adi: no code required, operator clears or archives the log file as desired"
+        ],
+        "why_it_matters": "Not a blocking pre-launch decision, but switching from no-rotation to a rotating handler after deployment requires a code change. Choosing a retention policy now avoids a later patch."
+      }
+    ],
+    "summary_card": "Tier: Standard (agreed \u2014 credential handling, log persistence, scheduler integration, and Craigslist anti-automation surface clear the Micro bar). 3 tech stack options presented: vanilla Playwright, Playwright+stealth, Selenium+undetected-chromedriver. 5 operator decisions raised: scheduler mechanism (cron vs. launchd), credential storage (Keychain vs. .env), anti-fingerprint strategy, explicit ToS/account-suspension risk acceptance, and log rotation policy."
+  }
+}
