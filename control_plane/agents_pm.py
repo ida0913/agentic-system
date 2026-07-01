@@ -228,6 +228,111 @@ def _build_phase2_user(
     """)
 
 
+def _render_success_metrics(metrics: list[str]) -> list[str]:
+    """Render the Success Metrics section."""
+    lines: list[str] = ["## Success Metrics", ""]
+    for m in metrics:
+        lines.append(f"- {m}")
+    lines.append("")
+    return lines
+
+
+def _render_features_requirements(fr: dict[str, Any]) -> list[str]:
+    """Render the Features & Requirements section (functional/non-functional/usability)."""
+    lines: list[str] = ["## Features & Requirements", ""]
+    for label, key in (
+        ("Functional", "functional"),
+        ("Non-functional", "non_functional"),
+        ("Usability", "usability"),
+    ):
+        items = fr.get(key, [])
+        if items:
+            lines.append(f"### {label}")
+            for item in items:
+                lines.append(f"- {item}")
+            lines.append("")
+    return lines
+
+
+def _render_assumptions_constraints(items: list[str]) -> list[str]:
+    """Render the Assumptions & Constraints section."""
+    lines: list[str] = ["## Assumptions & Constraints", ""]
+    for a in items:
+        lines.append(f"- {a}")
+    lines.append("")
+    return lines
+
+
+def _render_out_of_scope(items: list[str]) -> list[str]:
+    """Render the Out of Scope section."""
+    lines: list[str] = ["## Out of Scope", ""]
+    for o in items:
+        lines.append(f"- {o}")
+    lines.append("")
+    return lines
+
+
+def _render_acceptance_criteria(items: list[str]) -> list[str]:
+    """Render the Acceptance Criteria section."""
+    lines: list[str] = ["## Acceptance Criteria", ""]
+    for i, ac in enumerate(items, 1):
+        lines.append(f"{i}. {ac}")
+    lines.append("")
+    return lines
+
+
+def _render_dmaic_plan(plan: list[dict[str, Any]]) -> list[str]:
+    """Render the DMAIC Plan section. Returns an empty list if there's no plan."""
+    if not plan:
+        return []
+    lines: list[str] = ["## DMAIC Plan", ""]
+    for phase in plan:
+        lines.append(f"### {phase.get('phase', '?')}")
+        lines.append(f"**Owner:** {phase.get('owner', '?')}  "
+                     f"**Entry:** {phase.get('entry', '?')}  "
+                     f"**Exit:** {phase.get('exit', '?')}")
+        lines.append("")
+        for d in phase.get("deliverables", []):
+            lines.append(f"- {d}")
+        lines.append("")
+    return lines
+
+
+def _render_sipoc(sipoc: dict[str, Any]) -> list[str]:
+    """Render the SIPOC section. Returns an empty list if there's no SIPOC data."""
+    if not sipoc:
+        return []
+    lines: list[str] = ["## SIPOC", ""]
+    for label, key in (
+        ("Suppliers", "suppliers"),
+        ("Inputs", "inputs"),
+        ("Process", "process"),
+        ("Outputs", "outputs"),
+        ("Customers", "customers"),
+    ):
+        items = sipoc.get(key, [])
+        if items:
+            lines.append(f"**{label}**")
+            for item in items:
+                lines.append(f"- {item}")
+            lines.append("")
+    return lines
+
+
+def _render_ctq_tree(ctq_tree: list[dict[str, Any]]) -> list[str]:
+    """Render the CTQ Tree section. Returns an empty list if there's no CTQ tree."""
+    if not ctq_tree:
+        return []
+    lines: list[str] = ["## CTQ Tree", ""]
+    for entry in ctq_tree:
+        need = entry.get("need", "")
+        driver = entry.get("driver", "")
+        target = entry.get("measurable_target", "")
+        lines.append(f"- **Need:** {need} → **Driver:** {driver} → **Target:** {target}")
+    lines.append("")
+    return lines
+
+
 def _write_prd(parsed: dict, header: StateHeader, workspace: Path) -> Path:
     """Render the structured PRD JSON to a markdown file and return its path."""
     prd = parsed["prd"]
@@ -252,81 +357,20 @@ def _write_prd(parsed: dict, header: StateHeader, workspace: Path) -> Path:
     _section(lines, "Problem Statement", prd.get("problem_statement", ""))
     _section(lines, "Target Audience", prd.get("target_audience", ""))
 
-    lines += ["## Success Metrics", ""]
-    for m in prd.get("success_metrics", []):
-        lines.append(f"- {m}")
-    lines.append("")
-
-    lines += ["## Features & Requirements", ""]
-    fr = prd.get("features_requirements", {})
-    for label, key in (
-        ("Functional", "functional"),
-        ("Non-functional", "non_functional"),
-        ("Usability", "usability"),
-    ):
-        items = fr.get(key, [])
-        if items:
-            lines.append(f"### {label}")
-            for item in items:
-                lines.append(f"- {item}")
-            lines.append("")
+    lines += _render_success_metrics(prd.get("success_metrics", []))
+    lines += _render_features_requirements(prd.get("features_requirements", {}))
 
     _section(lines, "User Journey", prd.get("user_journey", ""))
 
-    lines += ["## Assumptions & Constraints", ""]
-    for a in prd.get("assumptions_constraints", []):
-        lines.append(f"- {a}")
-    lines.append("")
+    lines += _render_assumptions_constraints(prd.get("assumptions_constraints", []))
 
     _section(lines, "Competitive Context", prd.get("competitive_context", ""))
 
-    lines += ["## Out of Scope", ""]
-    for o in prd.get("out_of_scope", []):
-        lines.append(f"- {o}")
-    lines.append("")
-
-    lines += ["## Acceptance Criteria", ""]
-    for i, ac in enumerate(prd.get("acceptance_criteria", []), 1):
-        lines.append(f"{i}. {ac}")
-    lines.append("")
-
-    if parsed.get("dmaic_plan"):
-        lines += ["## DMAIC Plan", ""]
-        for phase in parsed["dmaic_plan"]:
-            lines.append(f"### {phase.get('phase', '?')}")
-            lines.append(f"**Owner:** {phase.get('owner', '?')}  "
-                         f"**Entry:** {phase.get('entry', '?')}  "
-                         f"**Exit:** {phase.get('exit', '?')}")
-            lines.append("")
-            for d in phase.get("deliverables", []):
-                lines.append(f"- {d}")
-            lines.append("")
-
-    if parsed.get("sipoc"):
-        sipoc = parsed["sipoc"]
-        lines += ["## SIPOC", ""]
-        for label, key in (
-            ("Suppliers", "suppliers"),
-            ("Inputs", "inputs"),
-            ("Process", "process"),
-            ("Outputs", "outputs"),
-            ("Customers", "customers"),
-        ):
-            items = sipoc.get(key, [])
-            if items:
-                lines.append(f"**{label}**")
-                for item in items:
-                    lines.append(f"- {item}")
-                lines.append("")
-
-    if parsed.get("ctq_tree"):
-        lines += ["## CTQ Tree", ""]
-        for entry in parsed["ctq_tree"]:
-            need = entry.get("need", "")
-            driver = entry.get("driver", "")
-            target = entry.get("measurable_target", "")
-            lines.append(f"- **Need:** {need} → **Driver:** {driver} → **Target:** {target}")
-        lines.append("")
+    lines += _render_out_of_scope(prd.get("out_of_scope", []))
+    lines += _render_acceptance_criteria(prd.get("acceptance_criteria", []))
+    lines += _render_dmaic_plan(parsed.get("dmaic_plan", []))
+    lines += _render_sipoc(parsed.get("sipoc", {}))
+    lines += _render_ctq_tree(parsed.get("ctq_tree", []))
 
     if parsed.get("summary_card"):
         lines += ["---", "", f"_{parsed['summary_card']}_", ""]
