@@ -101,3 +101,18 @@ Full test suite: 31 passed. No debug lines in production code. `_validate_resolv
 - **recurring:** yes — consistent with PM Phase 2's comprehensiveness (16K-char PRDs)
 - **fix_applied:** tier-scaled output added to ARCHITECT_SYSTEM: explicit right-size instruction, per-tier scaling of tech-stack-option count / design-doc depth / operator-decisions, plus a tier-aware validator floor (`_validate_tier_assessment` in `agents_architect.py`: >= 1 tech-stack option for Micro, >= 2 for Standard/Full, keyed off `recommended_tier`). Covered by new tests in `tests/test_architect.py` (Micro 1-option pass, Micro 0-option fail, Full 1-option fail). Verified via `desloppify show` that the changed files (`prompts/architect.py`, `agents_architect.py`, `test_architect.py`) carry zero open findings — see `wiki/DEBT.md` DEBT-001 for the unrelated pre-existing debt this scan also surfaced.
 - **status:** fixed
+
+---
+
+## PF-007
+
+- **date:** 2026-07-02
+- **agent:** PM (classification) AND Architect (tier-challenge) — both layers
+- **prompt_section:** PM classification logic + ARCHITECT_SYSTEM tier_assessment
+- **failure_class:** over-classification / tier-inflation
+- **severity:** medium (costs unnecessary process + tokens on simple projects; the Lean/right-sizing concern the tier system exists to prevent)
+- **what_happened:** On the worksheet-generator project, the PM classified tier=Standard, complexity=M — but the PRD it wrote describes a MICRO project by the system's own rubric: fully offline, no persistence beyond output PDFs, no external API, no PII, no integration, runs locally as a single CLI. The PM's own PRD prose ("no cloud account," "only artifact written to disk is the PDF," "no external API call") argues Micro while its classification field says Standard — the structured classification contradicts the evidence in its own output. The Architect then AGREED (verdict=agree, Standard->Standard) rather than challenging downward to Micro, so the tier-challenge mechanism — which exists specifically to catch mis-classification — did not fire in the correcting direction.
+- **evidence:** smoke_workspaces/worksheet-generator — PRD.md classification vs. its own constraints/out-of-scope sections; DESIGN.md tier_assessment verdict=agree
+- **recurring:** YES — second observation of the over-classification pattern. First: Craigslist project assessed Standard with heavy/comprehensive output (see PF-006, the over-processing note). Two consecutive projects both classified at or above their true tier; neither was ever challenged downward.
+- **fix_applied:** none yet — logged for future prompt tuning. Candidate fixes (do NOT implement now): (a) PM classification prompt should map its own "offline / no persistence / no integration / no PII" findings toward Micro rather than defaulting to Standard; (b) ARCHITECT_SYSTEM tier_assessment should explicitly consider challenging DOWNWARD, not just agreeing or challenging up — right-sizing cuts both directions.
+- **status:** open
